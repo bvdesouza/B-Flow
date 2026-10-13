@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.vercel.b_flow_gamma.twa",
+    "sha256_cert_fingerprints": ["69:C8:B1:79:DF:8E:10:FF:3E:5D:80:17:BE:98:5F:B7:98:06:5F:23:19:26:9B:A6:19:EE:7D:EC:A2:8B:DE:82"]
+  }
+}]
