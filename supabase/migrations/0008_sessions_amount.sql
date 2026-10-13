@@ -1,0 +1,2 @@
+ALTER TABLE sessions ADD COLUMN earned_amount NUMERIC DEFAULT 0;
+ALTER TABLE sessions ADD COLUMN attendee_count INTEGER DEFAULT 0;

@@ -1,0 +1,6 @@
+{
+  "name": "B-Flow",
+  "description": "App para gestão de alunos, turmas e finanças para personal trainers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
