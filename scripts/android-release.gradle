@@ -7,6 +7,7 @@ def keystorePath = System.getenv("CM_KEYSTORE_PATH")
 
 android {
     defaultConfig {
+        minSdkVersion 24
         if (buildNumber) {
             versionCode = Integer.parseInt(buildNumber) + 100
         }
