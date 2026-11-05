@@ -1,0 +1,102 @@
+# Builds do B-Flow na nuvem (Codemagic) — Android e iOS sem precisar de Mac.
+#
+# Antes de rodar, no painel do Codemagic:
+#  1. Environment variables > crie o grupo "supabase" com
+#     NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY.
+#  2. Android: Team settings > Code signing identities > Android keystores
+#     envie a sua keystore (.jks) com o nome de referência "bflow_keystore".
+#  3. iOS (quando tiver a conta Apple Developer): Team settings > Integrations >
+#     App Store Connect, adicione a chave de API com o nome "bflow_asc".
+
+definitions:
+  scripts:
+    - &install_deps
+      name: Instalar dependências
+      script: npm install
+    - &web_build
+      name: Gerar a versão estática do app
+      script: npm run build:app
+
+workflows:
+  android-release:
+    name: B-Flow Android (AAB para a Play Store)
+    instance_type: linux_x2
+    max_build_duration: 60
+    environment:
+      groups:
+        - supabase
+      android_signing:
+        - bflow_keystore
+      node: 22
+      java: 21
+      vars:
+        APP_VERSION_NAME: "1.0.0"
+    scripts:
+      - *install_deps
+      - *web_build
+      - name: Criar o projeto Android
+        script: |
+          npx cap add android
+          npx @capacitor/assets generate --android \
+            --iconBackgroundColor '#60a5fa' --iconBackgroundColorDark '#60a5fa' \
+            --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
+          npx cap sync android
+          echo "" >> android/app/build.gradle
+          echo "apply from: '../../scripts/android-release.gradle'" >> android/app/build.gradle
+      - name: Gerar o AAB assinado
+        script: |
+          cd android
+          chmod +x gradlew
+          ./gradlew bundleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.aab
+
+  ios-release:
+    name: B-Flow iOS (TestFlight / App Store)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: bflow_asc
+    environment:
+      groups:
+        - supabase
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.bflow.app
+      node: 22
+      xcode: latest
+      cocoapods: default
+      vars:
+        APP_VERSION_NAME: "1.0.0"
+    scripts:
+      - *install_deps
+      - *web_build
+      - name: Criar o projeto iOS
+        script: |
+          npx cap add ios
+          npx @capacitor/assets generate --ios \
+            --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
+          npx cap sync ios
+      - name: Textos de permissão (foto do aluno e comprovantes)
+        script: |
+          PLIST=ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'O B-Flow usa a câmera para tirar a foto do aluno e fotografar comprovantes de pagamento.'" $PLIST
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string 'O B-Flow acessa suas fotos para escolher a foto do aluno e anexar comprovantes de pagamento.'" $PLIST
+          /usr/libexec/PlistBuddy -c "Add :ITSAppUsesNonExemptEncryption bool false" $PLIST
+      - name: Assinatura e número da versão
+        script: |
+          xcode-project use-profiles
+          cd ios/App
+          agvtool new-marketing-version "$APP_VERSION_NAME"
+          agvtool new-version -all "$BUILD_NUMBER"
+      - name: Gerar o IPA
+        script: |
+          xcode-project build-ipa \
+            --workspace ios/App/App.xcworkspace \
+            --scheme App
+    artifacts:
+      - build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true

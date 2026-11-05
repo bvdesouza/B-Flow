@@ -1,7 +1,12 @@
 import type {NextConfig} from 'next';
 
+// CAPACITOR_BUILD=true gera uma versão estática (pasta "out") para o app de Android/iOS.
+// Sem essa variável, o build continua igual ao do site (Vercel / AI Studio).
+const isAppBuild = process.env.CAPACITOR_BUILD === 'true';
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  trailingSlash: isAppBuild,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -10,6 +15,7 @@ const nextConfig: NextConfig = {
   },
   // Allow access to remote image placeholder.
   images: {
+    unoptimized: isAppBuild,
     remotePatterns: [
       {
         protocol: 'https',
@@ -31,7 +37,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  output: 'standalone',
+  output: isAppBuild ? 'export' : 'standalone',
   transpilePackages: ['motion'],
   webpack: (config, {dev}) => {
     // HMR is disabled in AI Studio via DISABLE_HMR env var.

@@ -7,10 +7,24 @@ import { Navigation } from './Navigation';
 import { Loader2 } from 'lucide-react';
 import { AndroidNotificationManager } from './AndroidNotificationManager';
 
+// Páginas que qualquer pessoa pode abrir sem login (exigidas pela Play Store e App Store).
+const PUBLIC_PATHS = ['/privacidade', '/excluir-conta'];
+const normalizePath = (path: string | null) => (path && path.length > 1 ? path.replace(/\/+$/, '') : path || '/');
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const pathname = normalizePath(usePathname());
+  const isPublicPage = PUBLIC_PATHS.includes(pathname);
+
+  if (isPublicPage) {
+    return <main className="flex-1 w-full">{children}</main>;
+  }
+
+  return <ProtectedApp pathname={pathname}>{children}</ProtectedApp>;
+}
+
+function ProtectedApp({ children, pathname }: { children: React.ReactNode; pathname: string }) {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {

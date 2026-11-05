@@ -1,0 +1,31 @@
+// Aplicado pelo Codemagic em android/app/build.gradle.
+// Usa a keystore enviada ao Codemagic (Team settings > Code signing identities)
+// e o número do build como versionCode, que precisa aumentar a cada envio à Play Store.
+
+def buildNumber = System.getenv("BUILD_NUMBER")
+def keystorePath = System.getenv("CM_KEYSTORE_PATH")
+
+android {
+    defaultConfig {
+        if (buildNumber) {
+            versionCode = Integer.parseInt(buildNumber) + 100
+        }
+        versionName = System.getenv("APP_VERSION_NAME") ?: "1.0.0"
+    }
+
+    if (keystorePath) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword System.getenv("CM_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CM_KEY_ALIAS")
+                keyPassword System.getenv("CM_KEY_PASSWORD")
+            }
+        }
+        buildTypes {
+            release {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
