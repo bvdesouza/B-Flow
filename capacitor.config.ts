@@ -7,13 +7,8 @@ const config: CapacitorConfig = {
   appName: 'B-Flow',
   webDir: 'out',
   backgroundColor: '#121214',
-  android: {
-    // Android 15+ desenha o app por baixo da barra de status; isto mantém o conteúdo visível.
-    adjustMarginsForEdgeToEdge: 'auto',
-  },
-  ios: {
-    contentInset: 'automatic',
-  },
+  // O app ocupa a tela toda (Android 16 exige). O cabeçalho e o menu inferior
+  // usam --safe-area-inset-* (injetado pelo SystemBars) para não ficar sob as barras do sistema.
 };
 
 export default config;

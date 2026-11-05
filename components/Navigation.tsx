@@ -30,7 +30,7 @@ export function Navigation({ session }: { session: any }) {
 
   return (
     <>
-      <header className="fixed top-0 w-full z-40 bg-surface/80 backdrop-blur-md flex justify-between items-center px-margin-mobile h-[64px] border-b border-outline-variant/20 md:hidden">
+      <header style={{ paddingTop: 'var(--sat)', height: 'calc(64px + var(--sat))' }} className="fixed top-0 w-full z-40 bg-surface/80 backdrop-blur-md flex justify-between items-center px-margin-mobile border-b border-outline-variant/20 md:hidden">
         <div className="flex items-center gap-3">
           <Link href="/configuracoes">
             <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-surface-container-high relative flex items-center justify-center bg-surface-container">
@@ -106,7 +106,7 @@ export function Navigation({ session }: { session: any }) {
         </div>
       </aside>
 
-      <nav className="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center pt-base pb-[calc(env(safe-area-inset-bottom,16px)+8px)] px-gutter z-50 rounded-t-xl bg-surface-container shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
+      <nav className="md:hidden fixed bottom-0 left-0 w-full flex justify-around items-center pt-base pb-[calc(var(--sab)+8px)] px-gutter z-50 rounded-t-xl bg-surface-container shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
          {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;

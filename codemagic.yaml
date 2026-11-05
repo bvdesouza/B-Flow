@@ -41,9 +41,7 @@ workflows:
             --iconBackgroundColor '#60a5fa' --iconBackgroundColorDark '#60a5fa' \
             --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
           npx cap sync android
-          # A Proteção Automática do Google Play exige Android 7+ (SDK 24)
-          sed -i '' 's/minSdkVersion = 23/minSdkVersion = 24/' android/variables.gradle
-          grep minSdkVersion android/variables.gradle
+          grep -E "minSdkVersion|targetSdkVersion" android/variables.gradle
           echo "" >> android/app/build.gradle
           echo "apply from: '../../scripts/android-release.gradle'" >> android/app/build.gradle
       - name: Gerar o AAB assinado
@@ -76,7 +74,7 @@ workflows:
       - *web_build
       - name: Criar o projeto iOS
         script: |
-          npx cap add ios
+          npx cap add ios --packagemanager CocoaPods
           npx @capacitor/assets generate --ios \
             --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
           npx cap sync ios

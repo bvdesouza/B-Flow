@@ -74,7 +74,7 @@ function ProtectedApp({ children, pathname }: { children: React.ReactNode; pathn
     <>
       {session && <Navigation session={session} />}
       {session && <AndroidNotificationManager />}
-      <div className="flex-1 w-full md:pl-[280px]">
+      <div className="flex-1 w-full md:pl-[280px]" style={{ paddingTop: 'var(--sat)' }}>
         {children}
       </div>
     </>

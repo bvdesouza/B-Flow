@@ -13,9 +13,9 @@
     "cap:assets": "npx @capacitor/assets generate --iconBackgroundColor '#60a5fa' --iconBackgroundColorDark '#60a5fa' --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'"
   },
   "dependencies": {
-    "@capacitor/android": "^7.4.0",
-    "@capacitor/core": "^7.4.0",
-    "@capacitor/ios": "^7.4.0",
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/ios": "^8.0.0",
     "@google/genai": "^2.4.0",
     "@hookform/resolvers": "^5.2.1",
     "@supabase/supabase-js": "^2.108.2",
@@ -33,7 +33,7 @@
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",
-    "@capacitor/cli": "^7.4.0",
+    "@capacitor/cli": "^8.0.0",
     "@tailwindcss/postcss": "4.1.11",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",

@@ -79,3 +79,9 @@
   --font-size-label-sm: 11px;
   --font-size-label-lg: 14px;
 }
+
+/* Áreas seguras do celular (barra de status / barra de navegação). No navegador valem 0. */
+:root {
+  --sat: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --sab: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+}
