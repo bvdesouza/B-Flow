@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { DollarSign, AlertCircle, ArrowUpRight, ArrowDownRight, CheckSquare, ChevronLeft, ChevronRight, Loader2, Info, Pencil, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ReceiptsSection } from '@/components/ReceiptsSection';
+import { BarChart3, FileText } from 'lucide-react';
 import { StudentFinanceModal } from '@/components/StudentFinanceModal';
 import { useFinance } from '@/components/FinanceContext';
 
@@ -14,6 +16,41 @@ type MonthData = {
   total: number;
   dateStr: string;
 };
+
+const CHART_COLORS = { recebido: '#059669', aReceber: '#f59e0b' };
+
+const formatCompactCurrency = (value: number, visible: boolean) => {
+  if (!visible) return '•••';
+  if (!value) return 'R$ 0';
+  if (Math.abs(value) >= 1000) return 'R$ ' + (value / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + 'k';
+  return 'R$ ' + Math.round(value).toLocaleString('pt-BR');
+};
+
+function ChartTooltip({ active, payload, label, visible, labelPrefix = '' }: any) {
+  if (!active || !payload || payload.length === 0) return null;
+  const fmt = (v: number) => visible
+    ? 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    : 'R$ ••••';
+  const total = payload.reduce((sum: number, p: any) => sum + (Number(p.value) || 0), 0);
+  return (
+    <div className="rounded-xl border border-outline-variant bg-surface-container-lowest shadow-lg px-3.5 py-2.5 min-w-[170px]">
+      <p className="text-xs font-bold text-on-surface-variant mb-1.5">{labelPrefix}{label}</p>
+      {payload.map((p: any) => (
+        <div key={p.dataKey} className="flex items-center justify-between gap-4 text-sm py-0.5">
+          <span className="flex items-center gap-1.5 text-on-surface-variant">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.dataKey === 'recebido' ? CHART_COLORS.recebido : CHART_COLORS.aReceber }} />
+            {p.name}
+          </span>
+          <span className="font-bold text-on-surface">{fmt(p.value)}</span>
+        </div>
+      ))}
+      <div className="flex items-center justify-between gap-4 text-sm border-t border-outline-variant/60 mt-1.5 pt-1.5">
+        <span className="text-on-surface-variant">Total</span>
+        <span className="font-bold text-on-surface">{fmt(total)}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function Relatorios() {
   const { formatCurrency, isFinanceVisible } = useFinance();
@@ -32,6 +69,16 @@ export default function Relatorios() {
 
   const [studentDetails, setStudentDetails] = useState<any[]>([]);
   const [financeModalStudent, setFinanceModalStudent] = useState<any | null>(null);
+  const [activeTab, setActiveTab] = useState<'financeiro' | 'comprovantes'>('financeiro');
+  const [receiptsStudentId, setReceiptsStudentId] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('tab') === 'comprovantes') {
+      setActiveTab('comprovantes');
+      setReceiptsStudentId(params.get('aluno') || '');
+    }
+  }, []);
 
   const fetchRelatoriosData = async () => {
     setIsLoading(true);
@@ -573,7 +620,7 @@ export default function Relatorios() {
           <p className="font-body-lg text-body-lg text-on-surface-variant">Acompanhe seu desempenho financeiro.</p>
         </div>
         
-        <div className="flex items-center bg-surface-container-low border border-outline-variant rounded-lg p-1">
+        <div className={'flex items-center bg-surface-container-low border border-outline-variant rounded-lg p-1' + (activeTab === 'comprovantes' ? ' hidden' : '')}>
           <button onClick={handlePrevMonth} className="p-2 hover:bg-surface-container rounded-md text-on-surface-variant">
              <ChevronLeft className="w-4 h-4" />
           </button>
@@ -586,15 +633,33 @@ export default function Relatorios() {
         </div>
       </div>
 
+      <div className="flex p-1 mb-stack-lg rounded-full bg-surface-container-low border border-outline-variant w-full sm:w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab('financeiro')}
+          className={'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ' + (activeTab === 'financeiro' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface')}
+        >
+          <BarChart3 className="w-4 h-4" /> Financeiro
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('comprovantes')}
+          className={'flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2 rounded-full text-sm font-bold transition-all ' + (activeTab === 'comprovantes' ? 'bg-primary text-on-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface')}
+        >
+          <FileText className="w-4 h-4" /> Comprovantes
+        </button>
+      </div>
+
+      {activeTab === 'financeiro' && (<>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-stack-lg">
-        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex flex-col items-start justify-between gap-3">
           <div className="flex items-center gap-4 min-w-0">
             <div className="p-3 bg-primary-container rounded-xl shrink-0">
               <DollarSign className="text-on-primary-container w-6 h-6" />
             </div>
             <div className="min-w-0">
               <p className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5 truncate">Recebido ({monthNamesFull[currentDate.getMonth()].substring(0, 3)})</p>
-              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface truncate">
+              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface">
                 {formatCurrency(stats.receitaBruta)}
               </h3>
             </div>
@@ -605,14 +670,14 @@ export default function Relatorios() {
           </span>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex flex-col items-start justify-between gap-3">
           <div className="flex items-center gap-4 min-w-0">
             <div className="p-3 bg-error-container rounded-xl shrink-0">
               <AlertCircle className="text-on-error-container w-6 h-6" />
             </div>
             <div className="min-w-0">
               <p className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5 truncate">A Receber</p>
-              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface truncate">
+              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface">
                  {formatCurrency(stats.aReceber)}
               </h3>
             </div>
@@ -622,14 +687,14 @@ export default function Relatorios() {
           </span>
         </div>
 
-        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex items-center justify-between">
+        <div className="bg-surface-container-lowest rounded-xl p-4 border border-outline-variant shadow-sm hover:shadow-md transition-shadow flex flex-col items-start justify-between gap-3">
           <div className="flex items-center gap-4 min-w-0">
             <div className="p-3 bg-secondary-container rounded-xl shrink-0">
               <CheckSquare className="text-on-secondary-container w-6 h-6" />
             </div>
             <div className="min-w-0">
               <p className="font-label-sm text-[10px] text-on-surface-variant uppercase tracking-wider font-bold mb-0.5 truncate">Total do Mês</p>
-              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface truncate">
+              <h3 className="font-headline-lg-mobile text-[20px] font-bold text-on-surface">
                 {formatCurrency(stats.receitaBruta + stats.aReceber)}
               </h3>
             </div>
@@ -638,63 +703,103 @@ export default function Relatorios() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-stack-lg mb-stack-lg">
-        <section>
-          <h3 className="font-title-lg text-title-lg font-bold text-on-surface mb-stack-md">Evolução Mensal</h3>
-          <div className="bg-surface-container-lowest rounded-xl p-4 md:p-6 border border-outline-variant shadow-sm h-[300px]">
+        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-sm p-5 md:p-6 flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-title-lg text-title-lg font-bold text-on-surface">Evolução Mensal</h3>
+              <p className="text-xs text-on-surface-variant mt-0.5">Últimos 6 meses</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.recebido }} />Recebido</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.aReceber }} />A receber</span>
+            </div>
+          </div>
+          <div className="h-[260px] -ml-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-variant)" opacity={0.5} />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
+              <BarChart data={chartData} margin={{ top: 10, right: 4, left: 0, bottom: 0 }} barGap={4} barCategoryGap="24%">
+                <defs>
+                  <linearGradient id="gradRecebido" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#34d399" />
+                    <stop offset="100%" stopColor={CHART_COLORS.recebido} />
+                  </linearGradient>
+                  <linearGradient id="gradReceber" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fcd34d" />
+                    <stop offset="100%" stopColor={CHART_COLORS.aReceber} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--color-outline-variant)" opacity={0.45} />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
                   tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 12, fontWeight: 600 }}
-                  dy={10}
+                  dy={8}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 12, fontWeight: 600 }}
-                  tickFormatter={(value) => isFinanceVisible ? `R$ ${value}` : '••••'}
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  width={56}
+                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 11, fontWeight: 600 }}
+                  tickFormatter={(value) => formatCompactCurrency(Number(value), isFinanceVisible)}
                 />
-                <Tooltip 
-                  cursor={{ fill: 'var(--color-surface-container-high)', opacity: 0.4 }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid var(--color-outline-variant)', backgroundColor: 'var(--color-surface-container-lowest)' }}
-                  formatter={(value: any, name: any) => [isFinanceVisible ? `R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'R$ ••••', name]}
+                <Tooltip
+                  cursor={{ fill: 'var(--color-surface-container-high)', opacity: 0.5, radius: 8 } as any}
+                  content={(props: any) => <ChartTooltip {...props} visible={isFinanceVisible} />}
                 />
-                <Bar dataKey="recebido" stackId="a" fill="var(--color-primary)" name="Recebido" maxBarSize={40} />
-                <Bar dataKey="aReceber" stackId="a" fill="var(--color-error)" radius={[6, 6, 0, 0]} name="A Receber" maxBarSize={40} />
+                <Bar dataKey="recebido" name="Recebido" fill="url(#gradRecebido)" radius={[8, 8, 2, 2]} maxBarSize={28} animationDuration={700} />
+                <Bar dataKey="aReceber" name="A receber" fill="url(#gradReceber)" radius={[8, 8, 2, 2]} maxBarSize={28} animationDuration={700} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </section>
 
-        <section>
-          <h3 className="font-title-lg text-title-lg font-bold text-on-surface mb-stack-md">Evolução Diária ({['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][currentDate.getMonth()]})</h3>
-          <div className="bg-surface-container-lowest rounded-xl p-4 md:p-6 border border-outline-variant shadow-sm h-[300px]">
+        <section className="bg-surface-container-lowest rounded-2xl border border-outline-variant shadow-sm p-5 md:p-6 flex flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="font-title-lg text-title-lg font-bold text-on-surface">Evolução Diária</h3>
+              <p className="text-xs text-on-surface-variant mt-0.5">{monthNamesFull[currentDate.getMonth()]} de {currentDate.getFullYear()}</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs font-bold text-on-surface-variant">
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.recebido }} />Recebido</span>
+              <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: CHART_COLORS.aReceber }} />A receber</span>
+            </div>
+          </div>
+          <div className="h-[260px] -ml-2">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-outline-variant)" opacity={0.5} />
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 10, fontWeight: 600 }}
-                  dy={10}
+              <BarChart data={dailyChartData} margin={{ top: 10, right: 8, left: 0, bottom: 0 }} barCategoryGap="18%">
+                <defs>
+                  <linearGradient id="areaRecebido" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={CHART_COLORS.recebido} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={CHART_COLORS.recebido} stopOpacity={0.03} />
+                  </linearGradient>
+                  <linearGradient id="areaReceber" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={CHART_COLORS.aReceber} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={CHART_COLORS.aReceber} stopOpacity={0.03} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="var(--color-outline-variant)" opacity={0.45} />
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  interval="preserveStartEnd"
+                  minTickGap={14}
+                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 11, fontWeight: 600 }}
+                  dy={8}
                 />
-                <YAxis 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 12, fontWeight: 600 }}
-                  tickFormatter={(value) => isFinanceVisible ? `R$ ${value}` : '••••'}
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  width={56}
+                  tick={{ fill: 'var(--color-on-surface-variant)', fontSize: 11, fontWeight: 600 }}
+                  tickFormatter={(value) => formatCompactCurrency(Number(value), isFinanceVisible)}
                 />
-                <Tooltip 
-                  cursor={{ fill: 'var(--color-surface-container-high)', opacity: 0.4 }}
-                  contentStyle={{ borderRadius: '12px', border: '1px solid var(--color-outline-variant)', backgroundColor: 'var(--color-surface-container-lowest)' }}
-                  formatter={(value: any, name: any) => [isFinanceVisible ? `R$ ${value.toLocaleString('pt-BR', {minimumFractionDigits: 2})}` : 'R$ ••••', name]}
+                <Tooltip
+                  cursor={{ fill: 'var(--color-surface-container-high)', opacity: 0.5, radius: 6 } as any}
+                  content={(props: any) => <ChartTooltip {...props} visible={isFinanceVisible} labelPrefix="Dia " />}
                 />
-                <Bar dataKey="recebido" stackId="a" fill="var(--color-secondary)" name="Recebido" maxBarSize={20} />
-                <Bar dataKey="aReceber" stackId="a" fill="var(--color-error)" radius={[4, 4, 0, 0]} name="A Receber" maxBarSize={20} />
+                <Bar dataKey="recebido" name="Recebido" stackId="d" fill="url(#gradRecebido)" maxBarSize={14} animationDuration={700} />
+                <Bar dataKey="aReceber" name="A receber" stackId="d" fill="url(#gradReceber)" radius={[5, 5, 0, 0]} maxBarSize={14} animationDuration={700} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -748,7 +853,18 @@ export default function Relatorios() {
         )}
       </section>
 
-      <StudentFinanceModal 
+      </>)}
+
+      {activeTab === 'comprovantes' && <ReceiptsSection initialStudentId={receiptsStudentId} />}
+
+      <StudentFinanceModal
+        onOpenReceipts={() => {
+          const s = financeModalStudent;
+          setFinanceModalStudent(null);
+          setReceiptsStudentId(s && !s.isGroup ? s.id : '');
+          setActiveTab('comprovantes');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }} 
         isOpen={!!financeModalStudent}
         onClose={() => setFinanceModalStudent(null)}
         student={financeModalStudent}

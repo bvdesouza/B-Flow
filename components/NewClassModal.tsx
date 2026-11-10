@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Users as UsersIcon, X, Loader2, CalendarClock, Trash2, Plus } from 'lucide-react';
 import Image from 'next/image';
+import { QuickPlanModal, CreatedPlan } from './QuickPlanModal';
+import { QuickStudentModal, CreatedStudent, defaultImage } from './QuickStudentModal';
 
 type Plan = {
   id: string;
@@ -25,6 +27,8 @@ type Student = {
   name: string;
   image: string;
   status: string;
+  plan_id?: string | null;
+  schedule?: ScheduleItem[];
 };
 
 type GroupFormData = {
@@ -33,7 +37,7 @@ type GroupFormData = {
   plan_id: string | null;
   studentIds: string[];
   schedule: ScheduleItem[];
-  class_category: 'personal' | 'academia';
+  class_category: 'individual' | 'personal' | 'academia';
   academiaBillingCycle?: string;
   academiaPrice?: number | string;
   duration?: number | string;
@@ -50,6 +54,17 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
   const [groupFormError, setGroupFormError] = useState<string>('');
   const [students, setStudents] = useState<Student[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [isQuickPlanModalOpen, setIsQuickPlanModalOpen] = useState(false);
+  const [isQuickStudentModalOpen, setIsQuickStudentModalOpen] = useState(false);
+  const [individualMode, setIndividualMode] = useState<'new' | 'existing'>('new');
+  const [individualStudentId, setIndividualStudentId] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setIndividualMode('new');
+      setIndividualStudentId('');
+    }
+  }, [isOpen]);
 
   const [groupFormData, setGroupFormData] = useState<GroupFormData>({
     name: '',
@@ -57,7 +72,7 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
     plan_id: null,
     studentIds: [],
     schedule: [],
-    class_category: 'personal',
+    class_category: 'individual',
     academiaBillingCycle: 'aula',
     academiaPrice: 0,
     duration: 1
@@ -65,7 +80,7 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
 
   const fetchData = async () => {
     try {
-      const { data: studentsData } = await supabase.from('students').select('id, name, image, status').order('name');
+      const { data: studentsData } = await supabase.from('students').select('id, name, image, status, plan_id, schedule').order('name');
       const { data: plansData } = await supabase.from('plans').select('*');
       
       if (studentsData) setStudents(studentsData);
@@ -91,7 +106,7 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
           plan_id: null,
           studentIds: [],
           schedule: [],
-          class_category: 'personal',
+          class_category: 'individual',
           academiaBillingCycle: 'aula',
           academiaPrice: 0,
           duration: 1
@@ -103,8 +118,65 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
     
   }, [isOpen]);
 
+  const fillScheduleTimes = (schedule: ScheduleItem[]): ScheduleItem[] => schedule.map(s => {
+    if (!s.time) {
+      const now = new Date();
+      return { ...s, time: String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') };
+    }
+    return s;
+  });
+
+  const handleIndividualSubmit = async () => {
+    const schedule = groupFormData.schedule || [];
+    if (individualMode === 'new' && !groupFormData.name.trim()) {
+      setGroupFormError('Informe o nome do aluno.');
+      return;
+    }
+    if (individualMode === 'existing' && !individualStudentId) {
+      setGroupFormError('Selecione o aluno.');
+      return;
+    }
+    if (schedule.length === 0) {
+      setGroupFormError('Adicione pelo menos um horário para a aula.');
+      return;
+    }
+    setGroupFormError('');
+    setIsSaving(true);
+    try {
+      const finalSchedule = fillScheduleTimes(schedule);
+      if (individualMode === 'new') {
+        const selectedPlan = plans.find(p => p.id === groupFormData.plan_id);
+        const { error } = await supabase.from('students').insert([{
+          name: groupFormData.name.trim(),
+          plan: selectedPlan ? selectedPlan.name : '',
+          plan_id: groupFormData.plan_id || null,
+          status: 'Pago',
+          image: defaultImage,
+          schedule: finalSchedule
+        }]);
+        if (error) throw error;
+      } else {
+        const student = students.find(s => s.id === individualStudentId);
+        const oneOffItems = (student && student.schedule ? student.schedule : []).filter(s => s.isOneOff);
+        const { error } = await supabase.from('students').update({ schedule: [...finalSchedule, ...oneOffItems] }).eq('id', individualStudentId);
+        if (error) throw error;
+      }
+      onSuccess();
+      onClose();
+    } catch (err) {
+      console.error("Error saving individual class:", err);
+      setGroupFormError("Erro ao salvar aula individual.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleGroupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (groupFormData.class_category === 'individual') {
+      await handleIndividualSubmit();
+      return;
+    }
     if (groupFormData.class_category === 'personal' && groupFormData.studentIds.length < 2) {
       setGroupFormError("Selecione pelo menos 2 alunos para criar a aula em grupo.");
       return;
@@ -200,24 +272,105 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
             <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Tipo de Aula</label>
             <select 
               value={groupFormData.class_category || 'personal'}
-              onChange={(e) => setGroupFormData({...groupFormData, class_category: e.target.value as 'personal' | 'academia'})}
+              onChange={(e) => setGroupFormData({...groupFormData, class_category: e.target.value as 'individual' | 'personal' | 'academia'})}
               className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
             >
-              <option value="personal">Personal / Pequeno Grupo</option>
+              <option value="individual">Individual (1 aluno)</option>
+                <option value="personal">Pequeno Grupo</option>
               <option value="academia">Professor de Sala (Academia)</option>
             </select>
           </div>
 
+          {groupFormData.class_category === 'individual' && (
+            <div className="flex flex-col gap-3 border border-outline-variant rounded-xl p-4 bg-surface-container-lowest shadow-sm">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIndividualMode('new');
+                    setIndividualStudentId('');
+                    setGroupFormData(prev => ({ ...prev, name: '', schedule: [] }));
+                  }}
+                  className={individualMode === 'new' ? 'flex-1 py-2 rounded-lg text-sm font-bold border transition-colors bg-primary text-on-primary border-primary' : 'flex-1 py-2 rounded-lg text-sm font-bold border transition-colors bg-surface text-on-surface-variant border-outline-variant hover:bg-surface-container'}
+                >
+                  Novo aluno
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIndividualMode('existing');
+                    setIndividualStudentId('');
+                    setGroupFormData(prev => ({ ...prev, name: '', schedule: [] }));
+                  }}
+                  className={individualMode === 'existing' ? 'flex-1 py-2 rounded-lg text-sm font-bold border transition-colors bg-primary text-on-primary border-primary' : 'flex-1 py-2 rounded-lg text-sm font-bold border transition-colors bg-surface text-on-surface-variant border-outline-variant hover:bg-surface-container'}
+                >
+                  Aluno já cadastrado
+                </button>
+              </div>
+              {individualMode === 'new' ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Nome do Aluno</label>
+                  <input
+                    type="text"
+                    value={groupFormData.name}
+                    onChange={(e) => setGroupFormData({ ...groupFormData, name: e.target.value })}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-on-surface"
+                    placeholder="Ex: João da Silva"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Aluno</label>
+                  <select
+                    value={individualStudentId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setIndividualStudentId(id);
+                      const student = students.find(s => s.id === id);
+                      const weekly = (student && student.schedule ? student.schedule : []).filter(s => !s.isOneOff);
+                      setGroupFormData(prev => ({ ...prev, name: student ? student.name : '', schedule: [...weekly] }));
+                    }}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors text-on-surface"
+                  >
+                    <option value="" disabled>Selecione um aluno</option>
+                    {students.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-on-surface-variant">Os horários abaixo substituem os horários semanais atuais deste aluno.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {groupFormData.class_category === 'personal' && (
             <div className="flex flex-col gap-1.5 border border-outline-variant rounded-xl p-4 bg-surface-container-lowest shadow-sm">
-              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold mb-1">
-                Selecionar Alunos (Mínimo 2)
-              </label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">
+                  Selecionar Alunos (Mínimo 2)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickStudentModalOpen(true)}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Criar Novo Aluno
+                </button>
+              </div>
               <p className="text-xs text-on-surface-variant mb-3">Selecione quem fará parte desta aula. Você poderá alterar depois.</p>
               
               <div className="flex flex-col gap-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                 {students.length === 0 ? (
-                  <p className="text-sm italic text-on-surface-variant text-center py-2">Cadastre alunos primeiro.</p>
+                  <div className="flex flex-col items-center gap-2 py-3">
+                    <p className="text-sm italic text-on-surface-variant text-center">Nenhum aluno cadastrado.</p>
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickStudentModalOpen(true)}
+                      className="text-xs py-1.5 px-3 bg-primary text-on-primary rounded-full font-bold shadow-sm"
+                    >
+                      + Cadastrar Aluno Agora
+                    </button>
+                  </div>
                 ) : (
                   students.map(s => (
                     <label key={s.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-surface-container cursor-pointer transition-colors border border-transparent hover:border-outline-variant/50">
@@ -244,6 +397,7 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
             </div>
           )}
 
+          {groupFormData.class_category !== 'individual' && (
           <div className="flex flex-col gap-1.5">
             <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Nome da Aula</label>
             <input 
@@ -255,24 +409,46 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
               placeholder={groupFormData.class_category === 'academia' ? "Ex: Sala Musculação Manhã" : "Ex: Funcional Manhã"}
             />
           </div>
+          )}
 
-          {groupFormData.class_category === 'personal' && (
+          {(groupFormData.class_category === 'personal' || (groupFormData.class_category === 'individual' && individualMode === 'new')) && (
             <div className="flex flex-col gap-1.5">
-              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Plano Formato</label>
+              <div className="flex justify-between items-center">
+                <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Plano Formato</label>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickPlanModalOpen(true)}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Criar Novo Plano
+                </button>
+              </div>
               {plans.length === 0 ? (
                 <div className="flex flex-col items-start gap-2 bg-surface-container-low p-3 rounded-lg border border-outline-variant/50">
                   <p className="text-sm text-on-surface-variant">Nenhum plano cadastrado.</p>
+                  <button 
+                    type="button" 
+                    onClick={() => setIsQuickPlanModalOpen(true)} 
+                    className="text-sm py-1.5 px-4 bg-primary text-on-primary rounded-full font-bold shadow-sm hover:bg-primary/90 transition-colors"
+                  >
+                    + Criar Plano Agora
+                  </button>
                 </div>
               ) : (
                 <select 
                   value={groupFormData.plan_id || ''}
                   onChange={(e) => {
-                    setGroupFormData({...groupFormData, plan_id: e.target.value, plan: plans.find(p => p.id === e.target.value)?.name || ''});
+                    if (e.target.value === 'new') {
+                      setIsQuickPlanModalOpen(true);
+                    } else {
+                      setGroupFormData({...groupFormData, plan_id: e.target.value, plan: plans.find(p => p.id === e.target.value)?.name || ''});
+                    }
                   }}
                   className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
                 >
                   <option value="" disabled>Selecione um plano</option>
                   {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  <option value="new">+ Cadastrar novo plano...</option>
                 </select>
               )}
             </div>
@@ -405,6 +581,38 @@ export function NewClassModal({ isOpen, onClose, onSuccess }: NewClassModalProps
           </div>
         </form>
       </div>
+
+      <QuickPlanModal
+        isOpen={isQuickPlanModalOpen}
+        onClose={() => setIsQuickPlanModalOpen(false)}
+        onSuccess={(newPlan: CreatedPlan) => {
+          setPlans(prev => [newPlan, ...prev]);
+          setGroupFormData(prev => ({
+            ...prev,
+            plan_id: newPlan.id,
+            plan: newPlan.name
+          }));
+          setIsQuickPlanModalOpen(false);
+        }}
+      />
+
+      <QuickStudentModal
+        isOpen={isQuickStudentModalOpen}
+        onClose={() => setIsQuickStudentModalOpen(false)}
+        onSuccess={(newStudent: CreatedStudent) => {
+          setStudents(prev => [...prev, {
+            id: newStudent.id,
+            name: newStudent.name,
+            image: newStudent.image,
+            status: newStudent.status
+          }]);
+          setGroupFormData(prev => ({
+            ...prev,
+            studentIds: [...prev.studentIds, newStudent.id]
+          }));
+          setIsQuickStudentModalOpen(false);
+        }}
+      />
     </div>
   );
 }

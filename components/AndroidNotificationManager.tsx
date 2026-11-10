@@ -26,26 +26,28 @@ export function AndroidNotificationManager() {
   const [notifiedKeys, setNotifiedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    setIsMounted(true);
-    if (typeof window !== 'undefined') {
-      const savedEnabled = localStorage.getItem('app_notifications_enabled');
-      if (savedEnabled !== null) setEnabled(savedEnabled === 'true');
-      const savedOffset = localStorage.getItem('app_notifications_offset');
-      if (savedOffset !== null) setOffsetMinutes(parseInt(savedOffset, 10) || 0);
-      const savedPlatform = localStorage.getItem('app_notifications_platform');
-      if (savedPlatform) setPlatform(savedPlatform as any);
-      const savedNotified = localStorage.getItem('app_notified_classes_today');
-      if (savedNotified) {
-        try {
-          const parsed = JSON.parse(savedNotified);
-          const todayStr = getLocalDateString(new Date());
-          const todayKeys = parsed.filter((key: string) => key.endsWith(todayStr));
-          setNotifiedKeys(new Set(todayKeys));
-        } catch (e) {
-          console.error(e);
+    setTimeout(() => {
+      setIsMounted(true);
+      if (typeof window !== 'undefined') {
+        const savedEnabled = localStorage.getItem('app_notifications_enabled');
+        if (savedEnabled !== null) setEnabled(savedEnabled === 'true');
+        const savedOffset = localStorage.getItem('app_notifications_offset');
+        if (savedOffset !== null) setOffsetMinutes(parseInt(savedOffset, 10) || 0);
+        const savedPlatform = localStorage.getItem('app_notifications_platform');
+        if (savedPlatform) setPlatform(savedPlatform as any);
+        const savedNotified = localStorage.getItem('app_notified_classes_today');
+        if (savedNotified) {
+          try {
+            const parsed = JSON.parse(savedNotified);
+            const todayStr = getLocalDateString(new Date());
+            const todayKeys = parsed.filter((key: string) => key.endsWith(todayStr));
+            setNotifiedKeys(new Set(todayKeys));
+          } catch (e) {
+            console.error(e);
+          }
         }
       }
-    }
+    }, 0);
   }, []);
 
   const [isConfirming, setIsConfirming] = useState(false);

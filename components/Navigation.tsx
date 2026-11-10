@@ -6,6 +6,7 @@ import { LayoutDashboard, Calendar, Users, PieChart, Dumbbell, Settings, Bell, L
 import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 import { FinanceEyeButton } from './FinanceContext';
+import { BrandLockup } from './BrandLogo';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -42,7 +43,7 @@ export function Navigation({ session }: { session: any }) {
             </div>
           </Link>
         </div>
-        <h1 className="font-headline-lg-mobile text-[24px] font-bold text-primary">B-Flow</h1>
+        <h1 className="m-0 flex"><BrandLockup height={36} /><span className="sr-only">B-Flow</span></h1>
         <div className="flex items-center gap-1">
           <FinanceEyeButton />
           <button onClick={handleLogout} aria-label="logout" className="flex items-center justify-center w-10 h-10 rounded-full text-error hover:bg-error/10 transition-colors duration-200">
@@ -54,7 +55,7 @@ export function Navigation({ session }: { session: any }) {
       <aside className="hidden md:flex flex-col h-screen w-[280px] rounded-r-xl bg-surface-container-low border-r border-outline-variant shadow-xl fixed left-0 top-0 py-stack-lg z-40">
         <div className="px-6 mb-8 flex flex-col gap-2">
           <div className="flex justify-between items-center">
-            <h1 className="font-title-lg text-title-lg text-primary font-bold">B-Flow</h1>
+            <h1 className="m-0 flex"><BrandLockup height={42} /><span className="sr-only">B-Flow</span></h1>
             <FinanceEyeButton />
           </div>
           <div className="flex items-center gap-3 mt-4">

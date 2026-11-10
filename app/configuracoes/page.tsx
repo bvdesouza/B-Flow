@@ -33,11 +33,14 @@ export default function Configuracoes() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const savedEnabled = localStorage.getItem('app_notifications_enabled');
-      if (savedEnabled !== null) setNotifEnabled(savedEnabled === 'true');
       const savedOffset = localStorage.getItem('app_notifications_offset');
-      if (savedOffset !== null) setNotifOffset(parseInt(savedOffset, 10) || 0);
       const savedPlatform = localStorage.getItem('app_notifications_platform');
-      if (savedPlatform) setNotifPlatform(savedPlatform as any);
+
+      setTimeout(() => {
+        if (savedEnabled !== null) setNotifEnabled(savedEnabled === 'true');
+        if (savedOffset !== null) setNotifOffset(parseInt(savedOffset, 10) || 0);
+        if (savedPlatform) setNotifPlatform(savedPlatform as any);
+      }, 0);
     }
 
     const fetchProfile = async () => {
