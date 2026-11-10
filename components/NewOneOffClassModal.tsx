@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { X, Loader2, User, Calendar, Clock, DollarSign } from 'lucide-react';
+import { X, Loader2, User, Calendar, Clock, DollarSign, Plus } from 'lucide-react';
+import { QuickStudentModal, CreatedStudent } from './QuickStudentModal';
 
 type Student = {
   id: string;
@@ -30,6 +31,7 @@ export function NewOneOffClassModal({ isOpen, onClose, onSuccess }: NewOneOffCla
   const [time, setTime] = useState<string>('08:00');
   const [priceStr, setPriceStr] = useState<string>('');
   const [isPaid, setIsPaid] = useState<boolean>(false);
+  const [isQuickStudentModalOpen, setIsQuickStudentModalOpen] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -164,12 +166,27 @@ export function NewOneOffClassModal({ isOpen, onClose, onSuccess }: NewOneOffCla
         ) : (
           <form onSubmit={handleSave} className="flex flex-col p-6 gap-6">
             <div className="flex flex-col gap-2">
-              <label className="font-label-sm uppercase tracking-wider text-on-surface-variant font-bold flex items-center gap-2">
-                <User className="w-4 h-4" /> Aluno
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="font-label-sm uppercase tracking-wider text-on-surface-variant font-bold flex items-center gap-2">
+                  <User className="w-4 h-4" /> Aluno
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setIsQuickStudentModalOpen(true)}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Criar Novo Aluno
+                </button>
+              </div>
               <select
                 value={selectedStudent}
-                onChange={(e) => setSelectedStudent(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === 'new') {
+                    setIsQuickStudentModalOpen(true);
+                  } else {
+                    setSelectedStudent(e.target.value);
+                  }
+                }}
                 className="w-full bg-surface py-3 px-4 rounded-xl border border-outline-variant focus:outline-none focus:border-primary text-on-surface appearance-none font-body-lg"
                 required
               >
@@ -177,6 +194,7 @@ export function NewOneOffClassModal({ isOpen, onClose, onSuccess }: NewOneOffCla
                 {students.map(s => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
+                <option value="new">+ Cadastrar novo aluno...</option>
               </select>
             </div>
 
@@ -252,6 +270,16 @@ export function NewOneOffClassModal({ isOpen, onClose, onSuccess }: NewOneOffCla
           </form>
         )}
       </div>
+
+      <QuickStudentModal
+        isOpen={isQuickStudentModalOpen}
+        onClose={() => setIsQuickStudentModalOpen(false)}
+        onSuccess={(newStudent: CreatedStudent) => {
+          setStudents(prev => [newStudent, ...prev]);
+          setSelectedStudent(newStudent.id);
+          setIsQuickStudentModalOpen(false);
+        }}
+      />
     </div>
   );
 }

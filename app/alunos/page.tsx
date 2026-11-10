@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Search, ListFilter, User, Users as UsersIcon, ArrowRight, Plus, X, Pencil, Trash2, Camera, UserMinus, Loader2, CalendarClock, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { StudentFinanceModal } from '@/components/StudentFinanceModal';
+import { QuickPlanModal, CreatedPlan } from '@/components/QuickPlanModal';
 
 type Plan = {
   id: string;
@@ -68,6 +69,7 @@ export default function Alunos() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [financeModalStudent, setFinanceModalStudent] = useState<Student | null>(null);
+  const [isQuickPlanModalOpen, setIsQuickPlanModalOpen] = useState(false);
   
   const [formData, setFormData] = useState<Omit<Student, 'id'>>({
     name: '',
@@ -538,39 +540,60 @@ export default function Alunos() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Plano</label>
+                <div className="flex justify-between items-center">
+                  <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Plano</label>
+                  <button
+                    type="button"
+                    onClick={() => setIsQuickPlanModalOpen(true)}
+                    className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Criar Novo Plano
+                  </button>
+                </div>
                 {plans.length === 0 ? (
                   <div className="flex flex-col items-start gap-2 bg-surface-container-low p-3 rounded-lg border border-outline-variant/50">
                     <p className="text-sm text-on-surface-variant">Nenhum plano cadastrado.</p>
-                    <button type="button" onClick={() => router.push('/planos')} className="text-sm py-1.5 px-4 bg-primary text-on-primary rounded-full font-bold shadow-sm hover:bg-primary/90 transition-colors">Criar Plano</button>
+                    <button 
+                      type="button" 
+                      onClick={() => setIsQuickPlanModalOpen(true)} 
+                      className="text-sm py-1.5 px-4 bg-primary text-on-primary rounded-full font-bold shadow-sm hover:bg-primary/90 transition-colors"
+                    >
+                      + Criar Plano Agora
+                    </button>
                   </div>
                 ) : (
                   <select 
                     value={formData.plan_id || ''}
                     onChange={(e) => {
-                      if (e.target.value === 'new') router.push('/planos');
-                      else setFormData({...formData, plan_id: e.target.value, plan: plans.find(p => p.id === e.target.value)?.name || ''});
+                      if (e.target.value === 'new') {
+                        setIsQuickPlanModalOpen(true);
+                      } else {
+                        setFormData({...formData, plan_id: e.target.value, plan: plans.find(p => p.id === e.target.value)?.name || ''});
+                      }
                     }}
                     className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
                   >
                     <option value="" disabled>Selecione um plano</option>
                     {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    <option value="new">+ Criar novo plano</option>
+                    <option value="new">+ Cadastrar novo plano...</option>
                   </select>
                 )}
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Status do Pagamento</label>
-                <select 
-                  value={formData.status}
-                  onChange={(e) => setFormData({...formData, status: e.target.value as 'Pago' | 'Pendente'})}
-                  className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
-                >
-                  <option value="Pago">Pago</option>
-                  <option value="Pendente">Pendente</option>
-                </select>
-              </div>
+              {/* Status de pagamento só é exibido ao editar um aluno existente, não ao cadastrar um novo */}
+              {editingId && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold">Status do Pagamento</label>
+                  <select 
+                    value={formData.status}
+                    onChange={(e) => setFormData({...formData, status: e.target.value as 'Pago' | 'Pendente'})}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-3 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
+                  >
+                    <option value="Pago">Pago</option>
+                    <option value="Pendente">Pendente</option>
+                  </select>
+                </div>
+              )}
 
               <div className="flex flex-col gap-2 mt-2">
                 <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold flex items-center gap-2">
@@ -943,6 +966,20 @@ export default function Alunos() {
         student={financeModalStudent}
         onSuccess={() => {
           fetchSupabaseData();
+        }}
+      />
+
+      <QuickPlanModal
+        isOpen={isQuickPlanModalOpen}
+        onClose={() => setIsQuickPlanModalOpen(false)}
+        onSuccess={(newPlan: CreatedPlan) => {
+          setPlans(prev => [newPlan, ...prev]);
+          setFormData(prev => ({
+            ...prev,
+            plan_id: newPlan.id,
+            plan: newPlan.name
+          }));
+          setIsQuickPlanModalOpen(false);
         }}
       />
       

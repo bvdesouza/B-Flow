@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Dumbbell, Loader2, LogIn, UserPlus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { BrandLogoFull } from '@/components/BrandLogo';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -66,10 +67,10 @@ export default function Login() {
     <div className="flex min-h-screen w-full items-center justify-center bg-surface p-4">
       <div className="w-full max-w-md bg-surface-container rounded-3xl p-8 shadow-xl border border-outline-variant/30 overflow-y-auto max-h-[90vh]">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-primary/10 text-primary rounded-2xl flex items-center justify-center mb-4">
-            <Dumbbell className="w-8 h-8" />
+          <div className="-mx-8 -mt-8 mb-4 w-[calc(100%+4rem)] rounded-t-3xl bg-black flex justify-center py-6 shadow-[inset_0_-1px_0_rgba(16,185,129,0.35)]">
+            <BrandLogoFull width={190} />
           </div>
-          <h1 className="text-3xl font-display font-bold text-on-surface">B-[Flow]</h1>
+          <h1 className="sr-only">B-Flow</h1>
           <p className="text-on-surface-variant mt-2 text-center">
             {isLogin ? 'Faça login para continuar' : 'Crie sua conta para começar'}
           </p>

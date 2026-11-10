@@ -30,7 +30,7 @@ workflows:
       node: 22
       java: 21
       vars:
-        APP_VERSION_NAME: "1.0.0"
+        APP_VERSION_NAME: "1.1.0"
     scripts:
       - *install_deps
       - *web_build
@@ -38,8 +38,8 @@ workflows:
         script: |
           npx cap add android
           npx @capacitor/assets generate --android \
-            --iconBackgroundColor '#60a5fa' --iconBackgroundColorDark '#60a5fa' \
-            --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
+            --iconBackgroundColor '#000000' --iconBackgroundColorDark '#000000' \
+            --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000'
           npx cap sync android
           grep -E "minSdkVersion|targetSdkVersion" android/variables.gradle
           echo "" >> android/app/build.gradle
@@ -68,7 +68,7 @@ workflows:
       xcode: latest
       cocoapods: default
       vars:
-        APP_VERSION_NAME: "1.0.0"
+        APP_VERSION_NAME: "1.1.0"
     scripts:
       - *install_deps
       - *web_build
@@ -76,7 +76,7 @@ workflows:
         script: |
           npx cap add ios --packagemanager CocoaPods
           npx @capacitor/assets generate --ios \
-            --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'
+            --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000'
           npx cap sync ios
       - name: Textos de permissão (foto do aluno e comprovantes)
         script: |

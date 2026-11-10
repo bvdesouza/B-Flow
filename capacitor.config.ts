@@ -6,7 +6,7 @@ const config: CapacitorConfig = {
   appId: 'com.bflow.app',
   appName: 'B-Flow',
   webDir: 'out',
-  backgroundColor: '#121214',
+  backgroundColor: '#000000',
   // O app ocupa a tela toda (Android 16 exige). O cabeçalho e o menu inferior
   // usam --safe-area-inset-* (injetado pelo SystemBars) para não ficar sob as barras do sistema.
 };

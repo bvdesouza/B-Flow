@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { TrendingUp, Users, CheckSquare, Check, X, Plus, Loader2, CalendarClock, User } from 'lucide-react';
+import { TrendingUp, Users, CheckSquare, Check, X, Plus, Loader2, CalendarClock, CalendarDays, User } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ClassCheckModal } from '@/components/ClassCheckModal';
 import { NewClassModal } from '@/components/NewClassModal';
@@ -722,26 +722,14 @@ export default function Dashboard() {
           <div className="flex flex-col gap-3 items-end mb-2 animate-in slide-in-from-bottom-4 fade-in duration-200">
             <button 
               onClick={() => {
-                router.push('/alunos?newStudent=true');
-                setIsFabMenuOpen(false);
-              }}
-              className="flex items-center gap-3 bg-surface text-on-surface py-3 px-5 rounded-xl shadow-lg border border-outline-variant hover:bg-surface-container-low transition-colors"
-            >
-              <span className="font-label-lg font-bold">Novo Aluno</span>
-              <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                <User className="w-5 h-5" />
-              </div>
-            </button>
-            <button 
-              onClick={() => {
                 setIsNewClassModalOpen(true);
                 setIsFabMenuOpen(false);
               }}
               className="flex items-center gap-3 bg-surface text-on-surface py-3 px-5 rounded-xl shadow-lg border border-outline-variant hover:bg-surface-container-low transition-colors"
             >
-              <span className="font-label-lg font-bold">Nova Turma / Grupo</span>
+              <span className="font-label-lg font-bold">Nova Aula (Agenda)</span>
               <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                <Users className="w-5 h-5" />
+                <CalendarDays className="w-5 h-5" />
               </div>
             </button>
             <button 
@@ -754,6 +742,18 @@ export default function Dashboard() {
               <span className="font-label-lg font-bold">Nova Aula Avulsa</span>
               <div className="bg-primary/10 p-2 rounded-lg text-primary">
                 <CalendarClock className="w-5 h-5" />
+              </div>
+            </button>
+            <button 
+              onClick={() => {
+                router.push('/alunos?newStudent=true');
+                setIsFabMenuOpen(false);
+              }}
+              className="flex items-center gap-3 bg-surface text-on-surface py-3 px-5 rounded-xl shadow-lg border border-outline-variant hover:bg-surface-container-low transition-colors"
+            >
+              <span className="font-label-lg font-bold">Novo Aluno</span>
+              <div className="bg-primary/10 p-2 rounded-lg text-primary">
+                <User className="w-5 h-5" />
               </div>
             </button>
           </div>

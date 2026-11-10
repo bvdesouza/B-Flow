@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Navigation } from './Navigation';
 import { Loader2 } from 'lucide-react';
 import { AndroidNotificationManager } from './AndroidNotificationManager';
+import { BrandLogoFull } from './BrandLogo';
 
 // Páginas que qualquer pessoa pode abrir sem login (exigidas pela Play Store e App Store).
 const PUBLIC_PATHS = ['/privacidade', '/excluir-conta'];
@@ -58,8 +59,9 @@ function ProtectedApp({ children, pathname }: { children: React.ReactNode; pathn
 
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center gap-6 bg-black">
+        <BrandLogoFull width={220} className="animate-in fade-in zoom-in-95 duration-700" />
+        <Loader2 className="w-6 h-6 animate-spin text-[#34d399]" />
       </div>
     );
   }

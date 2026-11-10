@@ -5,6 +5,7 @@ import type {NextConfig} from 'next';
 const isAppBuild = process.env.CAPACITOR_BUILD === 'true';
 
 const nextConfig: NextConfig = {
+  distDir: process.env.NODE_ENV === 'production' ? '.next' : '.next-dev',
   reactStrictMode: true,
   trailingSlash: isAppBuild,
   eslint: {

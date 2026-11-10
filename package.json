@@ -10,7 +10,7 @@
     "clean": "next clean",
     "build:app": "CAPACITOR_BUILD=true next build",
     "cap:sync": "npm run build:app && npx cap sync",
-    "cap:assets": "npx @capacitor/assets generate --iconBackgroundColor '#60a5fa' --iconBackgroundColorDark '#60a5fa' --splashBackgroundColor '#121214' --splashBackgroundColorDark '#121214'"
+    "cap:assets": "npx @capacitor/assets generate --iconBackgroundColor '#000000' --iconBackgroundColorDark '#000000' --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000'"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
