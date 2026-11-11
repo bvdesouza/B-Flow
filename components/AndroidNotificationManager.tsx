@@ -4,7 +4,21 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getLocalDateString } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bell, Check, X, Info, Play, Settings, RefreshCcw } from 'lucide-react';
+import { Check, X, RefreshCcw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { BrandMark } from './BrandLogo';
+import {
+  isNativeApp,
+  setupNativeNotifications,
+  rescheduleClassNotifications,
+  onClassNotificationAction,
+  getNotificationSettings,
+  getPermissionState,
+  requestPermission,
+  ACTION_CONFIRM,
+  ACTION_OPEN_AGENDA,
+  ClassNotificationData,
+} from '@/lib/nativeNotifications';
 
 type NotificationItem = {
   id: string;
@@ -15,6 +29,7 @@ type NotificationItem = {
   scheduleItem: any;
   originalData: any;
   studentIds?: string[];
+  date?: string; // YYYY-MM-DD da aula (quando vem de uma notificação agendada)
 };
 
 export function AndroidNotificationManager() {
@@ -231,7 +246,9 @@ export function AndroidNotificationManager() {
   }, [addNotifiedKey]);
 
   // Run the checker on mount and every 30 seconds
+  // (no app de celular os avisos são agendados no sistema; esta checagem é só para o navegador)
   useEffect(() => {
+    if (isNativeApp()) return;
     checkUpcomingClasses();
     const interval = setInterval(checkUpcomingClasses, 30000);
     return () => clearInterval(interval);
@@ -277,13 +294,100 @@ export function AndroidNotificationManager() {
     return () => window.removeEventListener('notification-settings-updated', handleSettingsUpdate);
   }, []);
 
+  // ---- Notificações nativas (app de celular) ----
+  const router = useRouter();
+  const confirmRef = useRef<(item: NotificationItem) => void>(() => {});
+
+  useEffect(() => {
+    if (!isNativeApp()) return;
+
+    const resync = () => {
+      rescheduleClassNotifications().catch((err) => console.error('Erro ao agendar notificações:', err));
+    };
+    // Na primeira vez, pede a permissão de notificações do Android 13+ e agenda os avisos
+    setupNativeNotifications()
+      .then(async () => {
+        if (getNotificationSettings().enabled && (await getPermissionState()) === 'prompt') {
+          await requestPermission();
+        }
+      })
+      .catch(() => {})
+      .finally(resync);
+
+    const toItem = (d: ClassNotificationData): NotificationItem => ({
+      id: d.id,
+      type: d.type,
+      name: d.name,
+      time: d.time,
+      planName: d.planName,
+      scheduleItem: { isOneOff: d.isOneOff },
+      originalData: {},
+      studentIds: d.studentIds,
+      date: d.date,
+    });
+
+    const removeAction = onClassNotificationAction((actionId, data) => {
+      const item = toItem(data);
+      if (data.kind === 'teste') {
+        if (actionId === ACTION_CONFIRM) {
+          setSuccessToast('Notificações funcionando! (aula de teste, nada foi salvo)');
+          setTimeout(() => setSuccessToast(null), 3500);
+        } else if (actionId === ACTION_OPEN_AGENDA) {
+          router.push('/agenda');
+        } else {
+          setActiveNotification({ ...item, id: 'simulation-id' });
+        }
+        return;
+      }
+      if (actionId === ACTION_CONFIRM) {
+        confirmRef.current(item);
+      } else if (actionId === ACTION_OPEN_AGENDA) {
+        router.push('/agenda');
+      } else {
+        setActiveNotification(item);
+      }
+    });
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') resync();
+    };
+    window.addEventListener('agenda-updated', resync);
+    window.addEventListener('notification-settings-updated', resync);
+    document.addEventListener('visibilitychange', onVisible);
+    const interval = setInterval(resync, 30 * 60 * 1000);
+
+    return () => {
+      removeAction();
+      window.removeEventListener('agenda-updated', resync);
+      window.removeEventListener('notification-settings-updated', resync);
+      document.removeEventListener('visibilitychange', onVisible);
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Confirm presence from notification banner directly
   const handleConfirmPresence = async (item: NotificationItem) => {
+    // Simulação/teste: não grava nada no banco
+    if (item.id === 'simulation-id') {
+      setSuccessToast('Teste concluído! Nada foi salvo.');
+      setTimeout(() => setSuccessToast(null), 3500);
+      handleDismiss();
+      return;
+    }
     setIsConfirming(true);
     try {
-      const today = new Date();
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString();
-      const todayEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999).toISOString();
+      // Usa a data da aula (a notificação pode ser respondida depois do dia)
+      const classDay = item.date
+        ? (() => { const [y, m, d] = item.date!.split('-').map(Number); return new Date(y, m - 1, d); })()
+        : new Date();
+      const isToday = getLocalDateString(classDay) === getLocalDateString(new Date());
+      const [hh, mm] = (item.time || '00:00').split(':').map(Number);
+      const today = isToday
+        ? new Date()
+        : new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate(), hh || 0, mm || 0);
+      const todayStart = new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate()).toISOString();
+      const todayEnd = new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate(), 23, 59, 59, 999).toISOString();
 
       // Check if session already exists
       const { data: existingSessions } = await supabase
@@ -336,6 +440,8 @@ export function AndroidNotificationManager() {
       setIsConfirming(false);
     }
   };
+
+  confirmRef.current = handleConfirmPresence;
 
   const handleDismiss = () => {
     setActiveNotification(null);
@@ -392,9 +498,7 @@ export function AndroidNotificationManager() {
                 <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
                   <div className="flex items-center gap-2">
                     {/* iOS App Icon Mockup */}
-                    <div className="w-5 h-5 rounded-[5px] bg-gradient-to-tr from-[#2c3e50] to-[#3498db] flex items-center justify-center text-[10px] font-black tracking-tighter text-white shadow-inner">
-                      B
-                    </div>
+                    <BrandMark size={20} />
                     <span className="text-xs font-bold text-white/90 tracking-tight">B-Flow</span>
                     <span className="text-[10px] text-white/40 font-medium">• agora</span>
                   </div>
@@ -453,9 +557,7 @@ export function AndroidNotificationManager() {
                 <div className="flex items-center justify-between px-5 pt-4 pb-2.5">
                   <div className="flex items-center gap-2.5">
                     {/* Styled Notification Icon */}
-                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-on-primary">
-                      <Bell className="w-3.5 h-3.5" />
-                    </div>
+                    <BrandMark size={24} rounded={false} className="rounded-full" />
                     <span className="text-xs font-bold tracking-wider text-[#a4a4a8] uppercase">B-Flow</span>
                     <span className="text-xs text-[#7c7c80] font-medium">• agora</span>
                   </div>

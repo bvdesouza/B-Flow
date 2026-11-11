@@ -40,6 +40,8 @@ workflows:
           npx @capacitor/assets generate --android \
             --iconBackgroundColor '#000000' --iconBackgroundColorDark '#000000' \
             --splashBackgroundColor '#000000' --splashBackgroundColorDark '#000000'
+          # Ícone branco da barra de notificações (avisos de aula)
+          cp -R assets/notification/drawable-* android/app/src/main/res/
           npx cap sync android
           grep -E "minSdkVersion|targetSdkVersion" android/variables.gradle
           echo "" >> android/app/build.gradle

@@ -2,7 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Camera, Loader2, Save, User as UserIcon, Bell, Play, Check } from 'lucide-react';
+import { Camera, Loader2, Save, User as UserIcon, Bell, Play, Check, BellRing, Clock, TriangleAlert, Smartphone, Send, CalendarCheck } from 'lucide-react';
+import {
+  isNativeApp,
+  getPermissionState,
+  requestPermission,
+  rescheduleClassNotifications,
+  sendTestNotification,
+  PermissionState,
+} from '@/lib/nativeNotifications';
 import Image from 'next/image';
 
 export default function Configuracoes() {
@@ -24,6 +32,50 @@ export default function Configuracoes() {
   const [notifOffset, setNotifOffset] = useState<number>(0);
   const [notifPlatform, setNotifPlatform] = useState<'auto' | 'android' | 'ios'>('auto');
   const [notifSavedSuccess, setNotifSavedSuccess] = useState(false);
+  const [isNative, setIsNative] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<PermissionState>('prompt');
+  const [scheduledCount, setScheduledCount] = useState<number | null>(null);
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+
+  const refreshNotificationStatus = async () => {
+    const native = isNativeApp();
+    setIsNative(native);
+    setNotifPermission(await getPermissionState());
+    if (native) {
+      try {
+        setScheduledCount(await rescheduleClassNotifications());
+      } catch {
+        setScheduledCount(null);
+      }
+    }
+  };
+
+  useEffect(() => {
+    refreshNotificationStatus();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshNotificationStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRequestPermission = async () => {
+    await requestPermission();
+    await refreshNotificationStatus();
+  };
+
+  const handleSendTest = async () => {
+    setTestState('sending');
+    try {
+      const ok = await sendTestNotification();
+      setTestState(ok ? 'sent' : 'error');
+      await refreshNotificationStatus();
+    } catch {
+      setTestState('error');
+    }
+    setTimeout(() => setTestState('idle'), 6000);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -155,6 +207,9 @@ export default function Configuracoes() {
 
     setNotifSavedSuccess(true);
     setTimeout(() => setNotifSavedSuccess(false), 3000);
+    if (isNativeApp()) {
+      setTimeout(() => refreshNotificationStatus(), 300);
+    }
   };
 
   const handleTriggerSimulation = () => {
@@ -314,129 +369,157 @@ export default function Configuracoes() {
       </section>
 
       {/* Seção de Notificações */}
-      <section className="bg-surface-container-low rounded-[24px] p-6 shadow-sm border border-outline-variant/50 mt-6">
-        <div className="flex flex-col gap-1 mb-6">
-          <div className="flex items-center gap-2">
-            <Bell className="w-6 h-6 text-primary" />
-            <h3 className="font-title-lg text-on-surface font-bold">Notificações das Aulas</h3>
-          </div>
-          <p className="font-body-md text-on-surface-variant">Configure e teste os alertas de aula e confirmação rápida no Android e iPhone</p>
-        </div>
-
-        {notifSavedSuccess && (
-          <div className="p-4 rounded-xl mb-6 font-bold text-sm bg-primary-container text-on-primary-container flex items-center gap-2">
-            <Check className="w-4 h-4 text-primary" />
-            Preferências de notificação salvas com sucesso!
-          </div>
-        )}
-
-        <div className="flex flex-col gap-6">
-          {/* Toggle Switch */}
-          <div className="flex items-center justify-between pb-4 border-b border-outline-variant/30">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-bold text-on-surface">Ativar Notificações de Aula</span>
-              <span className="text-xs text-on-surface-variant">Mostrar alertas popup na hora ou minutos antes da aula iniciar</span>
+      <section className="mt-6 rounded-[24px] border border-outline-variant/50 bg-surface-container-low shadow-sm overflow-hidden">
+        <div className="p-6 bg-gradient-to-br from-[#0f766e] via-[#047857] to-[#065f46] text-white">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-white/15 flex items-center justify-center shrink-0">
+                <BellRing className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">Avisos de aula</h3>
+                <p className="text-sm text-white/80 mt-0.5 max-w-md">
+                  Receba um aviso no celular, mesmo com o app fechado, e confirme a presença dos alunos com um toque.
+                </p>
+              </div>
             </div>
             <button
               type="button"
+              role="switch"
+              aria-checked={notifEnabled}
+              aria-label="Ativar avisos de aula"
               onClick={() => {
                 const nextVal = !notifEnabled;
                 setNotifEnabled(nextVal);
                 handleSaveNotifications(nextVal, notifOffset, notifPlatform);
               }}
-              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                notifEnabled ? 'bg-primary' : 'bg-outline-variant'
-              }`}
+              className={'relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ' + (notifEnabled ? 'bg-[#34d399]' : 'bg-white/25')}
             >
               <span
                 aria-hidden="true"
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-surface shadow ring-0 transition duration-200 ease-in-out ${
-                  notifEnabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
+                className={'pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow transition duration-200 ' + (notifEnabled ? 'translate-x-5' : 'translate-x-0')}
               />
             </button>
           </div>
+          {isNative && notifEnabled && notifPermission === 'granted' && scheduledCount !== null && (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-bold">
+              <CalendarCheck className="w-4 h-4" />
+              {scheduledCount === 0
+                ? 'Nenhuma aula nos próximos 7 dias para avisar'
+                : scheduledCount + (scheduledCount === 1 ? ' aviso agendado' : ' avisos agendados') + ' para os próximos 7 dias'}
+            </div>
+          )}
+        </div>
 
-          {/* Platform / Style Selection */}
-          {notifEnabled && (
-            <div className="flex flex-col gap-2 pb-4 border-b border-outline-variant/30">
-              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold ml-1">
-                Estilo Visual do Alerta
-              </label>
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { label: 'Auto (Detectar)', value: 'auto' },
-                  { label: 'Android', value: 'android' },
-                  { label: 'iPhone (iOS)', value: 'ios' }
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      setNotifPlatform(opt.value as any);
-                      handleSaveNotifications(notifEnabled, notifOffset, opt.value as any);
-                    }}
-                    className={`py-2.5 px-3 rounded-xl text-xs font-bold border transition-all text-center ${
-                      notifPlatform === opt.value
-                        ? 'bg-primary/15 border-primary text-primary'
-                        : 'bg-surface border-outline-variant/50 text-on-surface-variant hover:bg-surface-container-high'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+        <div className="p-6 flex flex-col gap-5">
+          {notifSavedSuccess && (
+            <div className="p-3 rounded-xl font-bold text-sm bg-primary-container text-on-primary-container flex items-center gap-2">
+              <Check className="w-4 h-4 text-primary" />
+              Preferências salvas!
             </div>
           )}
 
-          {/* Time Offset Selection */}
-          {notifEnabled && (
-            <div className="flex flex-col gap-2 pb-4 border-b border-outline-variant/30">
-              <label className="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant font-bold ml-1">
-                Quando disparar o alerta?
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { label: 'No horário', value: 0 },
-                  { label: '5 min antes', value: 5 },
-                  { label: '10 min antes', value: 10 },
-                  { label: '15 min antes', value: 15 },
-                  { label: '30 min antes', value: 30 },
-                  { label: '1 hora antes', value: 60 }
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      setNotifOffset(opt.value);
-                      handleSaveNotifications(notifEnabled, opt.value, notifPlatform);
-                    }}
-                    className={`py-2.5 px-4 rounded-xl text-xs font-bold border transition-all text-center ${
-                      notifOffset === opt.value
-                        ? 'bg-primary/15 border-primary text-primary'
-                        : 'bg-surface border-outline-variant/50 text-on-surface-variant hover:bg-surface-container-high'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+          {/* Status da permissão */}
+          {!isNative ? (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-surface border border-outline-variant/60">
+              <Smartphone className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-bold text-on-surface">Avisos com o app fechado só no app do celular</p>
+                <p className="text-on-surface-variant mt-0.5">
+                  Aqui no navegador o aviso aparece apenas enquanto o B-Flow estiver aberto. Instale o app pela Play Store para receber os avisos a qualquer momento.
+                </p>
               </div>
+            </div>
+          ) : notifPermission === 'granted' ? (
+            <div className="flex items-center gap-3 p-4 rounded-2xl bg-primary/10 border border-primary/30">
+              <Check className="w-5 h-5 text-primary shrink-0" />
+              <p className="text-sm font-bold text-on-surface">Notificações permitidas neste celular</p>
+            </div>
+          ) : notifPermission === 'denied' ? (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#fef3c7] border border-[#f59e0b]/40">
+              <TriangleAlert className="w-5 h-5 text-[#b45309] shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="font-bold text-[#78350f]">As notificações estão bloqueadas</p>
+                <p className="text-[#92400e] mt-0.5">
+                  Abra as Configurações do celular, vá em Apps, depois B-Flow, depois Notificações, e ative. Depois volte para esta tela.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl bg-surface border border-outline-variant/60">
+              <div className="flex items-start gap-3">
+                <Bell className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div className="text-sm">
+                  <p className="font-bold text-on-surface">Permita as notificações</p>
+                  <p className="text-on-surface-variant mt-0.5">O Android precisa da sua autorização para mostrar os avisos.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRequestPermission}
+                className="py-2.5 px-5 rounded-full bg-primary text-on-primary text-sm font-bold shrink-0"
+              >
+                Permitir
+              </button>
             </div>
           )}
 
-          {/* Action Simulation Trigger */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-bold text-on-surface">Simular Notificação Agora</span>
-              <span className="text-xs text-on-surface-variant">Teste a aparência e o recurso de confirmação rápida instantaneamente</span>
+          {/* Quando avisar */}
+          <div className={'flex flex-col gap-2 ' + (notifEnabled ? '' : 'opacity-50 pointer-events-none')}>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 text-on-surface-variant" />
+              <span className="text-sm font-bold text-on-surface">Quando avisar</span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {[
+                { label: 'Na hora', value: 0 },
+                { label: '5 min', value: 5 },
+                { label: '10 min', value: 10 },
+                { label: '15 min', value: 15 },
+                { label: '30 min', value: 30 },
+                { label: '1 hora', value: 60 }
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => {
+                    setNotifOffset(opt.value);
+                    handleSaveNotifications(notifEnabled, opt.value, notifPlatform);
+                  }}
+                  className={'py-2.5 rounded-xl text-xs font-bold border transition-all text-center ' + (notifOffset === opt.value
+                    ? 'bg-primary text-on-primary border-primary shadow-sm'
+                    : 'bg-surface border-outline-variant/60 text-on-surface-variant hover:bg-surface-container-high')}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-on-surface-variant">
+              {notifOffset === 0 ? 'O aviso chega no horário de início da aula.' : 'O aviso chega ' + (notifOffset === 60 ? '1 hora' : notifOffset + ' minutos') + ' antes do início da aula.'}
+              {isNative && ' Com o celular parado por muito tempo, o Android pode atrasar o aviso alguns minutos para economizar bateria.'}
+            </p>
+          </div>
+
+          {/* Teste */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-5 border-t border-outline-variant/40">
+            <div className="text-sm">
+              <p className="font-bold text-on-surface">Testar aviso</p>
+              <p className="text-on-surface-variant mt-0.5">
+                {isNative
+                  ? 'Enviamos um aviso de exemplo em 5 segundos. Feche o app para ver o pop-up. Nada é salvo.'
+                  : 'Mostra um aviso de exemplo aqui na tela. Nada é salvo.'}
+              </p>
+              {testState === 'sent' && <p className="text-primary font-bold mt-1">Aviso enviado! Aguarde 5 segundos.</p>}
+              {testState === 'error' && <p className="text-error font-bold mt-1">Não foi possível enviar. Verifique a permissão de notificações.</p>}
             </div>
             <button
               type="button"
-              onClick={handleTriggerSimulation}
-              className="flex items-center justify-center gap-1.5 py-2.5 px-5 bg-surface-container-highest hover:bg-outline-variant/30 text-on-surface font-bold text-xs rounded-xl border border-outline-variant transition-all shrink-0"
+              onClick={isNative ? handleSendTest : handleTriggerSimulation}
+              disabled={testState === 'sending'}
+              className="flex items-center justify-center gap-2 py-2.5 px-5 rounded-full bg-surface-container-highest hover:bg-outline-variant/30 text-on-surface font-bold text-sm border border-outline-variant transition-all shrink-0 disabled:opacity-50"
             >
-              <Play className="w-3.5 h-3.5" />
-              Testar Notificação
+              {testState === 'sending' ? <Loader2 className="w-4 h-4 animate-spin" /> : isNative ? <Send className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+              Enviar teste
             </button>
           </div>
         </div>
