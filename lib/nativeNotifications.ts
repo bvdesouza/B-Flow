@@ -9,13 +9,13 @@ import { getLocalDateString } from './utils';
 export const CLASS_CHANNEL_ID = 'aulas';
 export const CLASS_ACTION_TYPE = 'AULA';
 export const ACTION_CONFIRM = 'confirmar';
-export const ACTION_OPEN_AGENDA = 'agenda';
+export const ACTION_CANCEL = 'cancelar';
 
 const DAYS_AHEAD = 7;
 const MAX_SCHEDULED = 60;
 
 export type ClassNotificationData = {
-  kind: 'aula' | 'teste';
+  kind: 'aula';
   id: string;
   type: 'student' | 'group';
   name: string;
@@ -71,7 +71,7 @@ export const setupNativeNotifications = (): Promise<void> => {
             id: CLASS_ACTION_TYPE,
             actions: [
               { id: ACTION_CONFIRM, title: 'Confirmar presença', foreground: true },
-              { id: ACTION_OPEN_AGENDA, title: 'Abrir agenda', foreground: true },
+              { id: ACTION_CANCEL, title: 'Cancelar aula', foreground: true, destructive: true },
             ],
           },
         ],
@@ -115,9 +115,10 @@ const notificationIdFor = (key: string) => {
 };
 
 const buildContent = (c: ClassNotificationData, offset: number) => {
-  const title = 'Aula às ' + c.time + ' · ' + c.name;
-  const when = offset > 0 ? 'Começa em ' + offset + ' min' : 'Está na hora';
-  const body = when + ' (' + c.planName + '). Confirme a presença dos alunos.';
+  const title = offset > 0
+    ? 'A aula de ' + c.name + ' começa em ' + offset + ' min'
+    : 'Está na hora da aula de ' + c.name;
+  const body = 'Aula das ' + c.time;
   return { title, body };
 };
 
@@ -245,47 +246,6 @@ export const rescheduleClassNotifications = async (): Promise<number> => {
   return items.length;
 };
 
-// Envia um aviso de teste em 5 segundos (pode fechar o app para ver o pop-up).
-export const sendTestNotification = async (): Promise<boolean> => {
-  if (!isNativeApp()) return false;
-  await setupNativeNotifications();
-  if ((await getPermissionState()) !== 'granted') {
-    if ((await requestPermission()) !== 'granted') return false;
-  }
-  const at = new Date(Date.now() + 5000);
-  const time = at.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  const sample: ClassNotificationData = {
-    kind: 'teste',
-    id: 'teste',
-    type: 'student',
-    name: 'Aluno de exemplo',
-    time,
-    date: getLocalDateString(at),
-    planName: 'Teste de notificação',
-    isOneOff: false,
-    studentIds: [],
-  };
-  const { title, body } = buildContent(sample, 0);
-  await LocalNotifications.schedule({
-    notifications: [
-      {
-        id: 1999999999,
-        title,
-        body,
-        largeBody: body,
-        channelId: CLASS_CHANNEL_ID,
-        actionTypeId: CLASS_ACTION_TYPE,
-        smallIcon: 'ic_stat_bflow',
-        iconColor: '#10B981',
-        autoCancel: true,
-        schedule: { at, allowWhileIdle: true },
-        extra: sample,
-      },
-    ],
-  });
-  return true;
-};
-
 // Chamado quando o usuário toca na notificação ou em um dos botões (mesmo que o app estivesse fechado).
 export const onClassNotificationAction = (
   cb: (actionId: string, data: ClassNotificationData) => void,
@@ -293,9 +253,101 @@ export const onClassNotificationAction = (
   if (!isNativeApp()) return () => {};
   const handle = LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
     const data = event.notification?.extra as ClassNotificationData | undefined;
-    if (data && (data.kind === 'aula' || data.kind === 'teste')) cb(event.actionId, data);
+    if (data && data.kind === 'aula') cb(event.actionId, data);
   });
   return () => {
     handle.then((h) => h.remove()).catch(() => {});
+  };
+};
+
+// ---- Ações da notificação (Confirmar presença / Cancelar aula) ----
+// Grava direto no banco. Funciona mesmo quando o app foi aberto pelo botão da notificação:
+// espera a sessão do login ser restaurada antes de salvar.
+const classDayBounds = (dateStr: string) => {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return {
+    start: new Date(y, m - 1, d, 0, 0, 0, 0),
+    end: new Date(y, m - 1, d, 23, 59, 59, 999),
+  };
+};
+
+const sameClass = (s: any, c: ClassNotificationData) => {
+  const a = s.attendee_ids && !Array.isArray(s.attendee_ids) ? s.attendee_ids : {};
+  if (a.class_time) {
+    if (a.class_time !== c.time) return false;
+    if (a.isOneOff !== undefined) return !!a.isOneOff === !!c.isOneOff;
+    return !c.isOneOff;
+  }
+  if (c.isOneOff) return typeof a.notes === 'string' && a.notes.includes(c.time);
+  return !a.isOneOff;
+};
+
+export type ClassActionResult = { ok: boolean; message: string };
+
+export const performClassAction = async (
+  action: 'confirm' | 'cancel',
+  c: ClassNotificationData,
+): Promise<ClassActionResult> => {
+  // Aguarda o login ser restaurado (o app pode ter acabado de abrir pela notificação)
+  let session = null;
+  for (let i = 0; i < 20 && !session; i++) {
+    const res = await supabase.auth.getSession();
+    session = res.data.session;
+    if (!session) await new Promise((r) => setTimeout(r, 500));
+  }
+  if (!session) return { ok: false, message: 'Entre na sua conta para registrar a aula.' };
+
+  const { start, end } = classDayBounds(c.date);
+  const { data: existing, error: fetchError } = await supabase
+    .from('sessions')
+    .select('id, attendee_ids, status')
+    .eq('reference_id', c.id)
+    .eq('type', c.type)
+    .gte('date', start.toISOString())
+    .lte('date', end.toISOString());
+  if (fetchError) return { ok: false, message: 'Não foi possível salvar. Tente pela agenda.' };
+
+  const current = (existing || []).find((s: any) => sameClass(s, c));
+  const prev = current && current.attendee_ids && !Array.isArray(current.attendee_ids) ? current.attendee_ids : {};
+
+  const [hh, mm] = c.time.split(':').map(Number);
+  const classDate = new Date(start.getFullYear(), start.getMonth(), start.getDate(), hh || 0, mm || 0);
+
+  let status: string;
+  let attendee_ids: any;
+  if (action === 'confirm') {
+    status = 'completed';
+    attendee_ids = {
+      external_visitors: [],
+      paid: false,
+      academia_count: 0,
+      additional_value: 0,
+      ...prev,
+      attendees: c.studentIds || [],
+      class_time: c.time,
+      isOneOff: !!c.isOneOff,
+    };
+  } else {
+    status = 'cancelled';
+    attendee_ids = { ...prev, class_time: c.time, isOneOff: !!c.isOneOff };
+  }
+
+  const { error } = current
+    ? await supabase.from('sessions').update({ status, attendee_ids }).eq('id', current.id)
+    : await supabase.from('sessions').insert({
+        type: c.type,
+        reference_id: c.id,
+        date: classDate.toISOString(),
+        status,
+        attendee_ids,
+      });
+  if (error) return { ok: false, message: 'Não foi possível salvar. Tente pela agenda.' };
+
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('agenda-updated'));
+  return {
+    ok: true,
+    message: action === 'confirm'
+      ? 'Presença confirmada: aula de ' + c.name + ' (' + c.time + ')'
+      : 'Aula de ' + c.name + ' (' + c.time + ') cancelada',
   };
 };

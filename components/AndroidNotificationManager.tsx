@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase';
 import { getLocalDateString } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { Check, X, RefreshCcw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { BrandMark } from './BrandLogo';
 import {
   isNativeApp,
@@ -16,7 +15,8 @@ import {
   getPermissionState,
   requestPermission,
   ACTION_CONFIRM,
-  ACTION_OPEN_AGENDA,
+  ACTION_CANCEL,
+  performClassAction,
   ClassNotificationData,
 } from '@/lib/nativeNotifications';
 
@@ -295,8 +295,8 @@ export function AndroidNotificationManager() {
   }, []);
 
   // ---- Notificações nativas (app de celular) ----
-  const router = useRouter();
   const confirmRef = useRef<(item: NotificationItem) => void>(() => {});
+  const cancelRef = useRef<(item: NotificationItem) => void>(() => {});
 
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -328,22 +328,12 @@ export function AndroidNotificationManager() {
 
     const removeAction = onClassNotificationAction((actionId, data) => {
       const item = toItem(data);
-      if (data.kind === 'teste') {
-        if (actionId === ACTION_CONFIRM) {
-          setSuccessToast('Notificações funcionando! (aula de teste, nada foi salvo)');
-          setTimeout(() => setSuccessToast(null), 3500);
-        } else if (actionId === ACTION_OPEN_AGENDA) {
-          router.push('/agenda');
-        } else {
-          setActiveNotification({ ...item, id: 'simulation-id' });
-        }
-        return;
-      }
       if (actionId === ACTION_CONFIRM) {
         confirmRef.current(item);
-      } else if (actionId === ACTION_OPEN_AGENDA) {
-        router.push('/agenda');
+      } else if (actionId === ACTION_CANCEL) {
+        cancelRef.current(item);
       } else {
+        // Tocou no corpo da notificação: mostra o aviso dentro do app com os dois botões
         setActiveNotification(item);
       }
     });
@@ -366,82 +356,49 @@ export function AndroidNotificationManager() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Confirm presence from notification banner directly
-  const handleConfirmPresence = async (item: NotificationItem) => {
-    // Simulação/teste: não grava nada no banco
+  const showToast = (msg: string) => {
+    setSuccessToast(msg);
+    setTimeout(() => setSuccessToast(null), 3500);
+  };
+
+  // Confirma a presença ou cancela a aula (pelo aviso dentro do app ou pelos botões da notificação)
+  const runClassAction = async (action: 'confirm' | 'cancel', item: NotificationItem) => {
     if (item.id === 'simulation-id') {
-      setSuccessToast('Teste concluído! Nada foi salvo.');
-      setTimeout(() => setSuccessToast(null), 3500);
+      showToast('Teste concluído! Nada foi salvo.');
       handleDismiss();
       return;
     }
     setIsConfirming(true);
     try {
-      // Usa a data da aula (a notificação pode ser respondida depois do dia)
-      const classDay = item.date
-        ? (() => { const [y, m, d] = item.date!.split('-').map(Number); return new Date(y, m - 1, d); })()
-        : new Date();
-      const isToday = getLocalDateString(classDay) === getLocalDateString(new Date());
-      const [hh, mm] = (item.time || '00:00').split(':').map(Number);
-      const today = isToday
-        ? new Date()
-        : new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate(), hh || 0, mm || 0);
-      const todayStart = new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate()).toISOString();
-      const todayEnd = new Date(classDay.getFullYear(), classDay.getMonth(), classDay.getDate(), 23, 59, 59, 999).toISOString();
-
-      // Check if session already exists
-      const { data: existingSessions } = await supabase
-        .from('sessions')
-        .select('id')
-        .eq('reference_id', item.id)
-        .eq('type', item.type)
-        .gte('date', todayStart)
-        .lte('date', todayEnd);
-
-      const sessionData = {
-        attendees: item.studentIds || [],
-        external_visitors: [],
-        paid: false,
-        academia_count: 0,
-        additional_value: 0,
-        class_time: item.time,
-        isOneOff: !!item.scheduleItem?.isOneOff
-      };
-
-      if (existingSessions && existingSessions.length > 0) {
-        // Update existing
-        await supabase
-          .from('sessions')
-          .update({ attendee_ids: sessionData, status: 'completed' })
-          .eq('id', existingSessions[0].id);
-      } else {
-        // Insert new session
-        await supabase.from('sessions').insert({
-          type: item.type,
-          reference_id: item.id,
-          date: today.toISOString(),
-          status: 'completed',
-          attendee_ids: sessionData
-        });
+      const result = await performClassAction(action, {
+        kind: 'aula',
+        id: item.id,
+        type: item.type,
+        name: item.name,
+        time: item.time,
+        date: item.date || getLocalDateString(new Date()),
+        planName: item.planName,
+        isOneOff: !!item.scheduleItem?.isOneOff,
+        studentIds: item.studentIds || [],
+      });
+      showToast(result.message);
+      if (result.ok) {
+        handleDismiss();
+        if (isNativeApp()) rescheduleClassNotifications().catch(() => {});
       }
-
-      // Success feedback!
-      setSuccessToast(`Presença confirmada para ${item.name}!`);
-      setTimeout(() => setSuccessToast(null), 3500);
-
-      // Trigger update on agenda/dashboard
-      window.dispatchEvent(new CustomEvent('agenda-updated'));
-
-      // Dismiss current notification
-      handleDismiss();
     } catch (error) {
-      console.error('Error confirming presence from notification:', error);
+      console.error('Erro ao registrar a aula pela notificação:', error);
+      showToast('Não foi possível salvar. Tente pela agenda.');
     } finally {
       setIsConfirming(false);
     }
   };
 
+  const handleConfirmPresence = (item: NotificationItem) => runClassAction('confirm', item);
+  const handleCancelClass = (item: NotificationItem) => runClassAction('cancel', item);
+
   confirmRef.current = handleConfirmPresence;
+  cancelRef.current = handleCancelClass;
 
   const handleDismiss = () => {
     setActiveNotification(null);
@@ -513,20 +470,21 @@ export function AndroidNotificationManager() {
                 {/* iOS Content */}
                 <div className="px-4 pb-3">
                   <h4 className="text-[14px] font-bold text-white tracking-tight leading-tight">
-                    Hora da Aula! {activeNotification.time}
+                    Está na hora da aula de <span className="text-primary">{activeNotification.name}</span>
                   </h4>
-                  <p className="text-[12.5px] text-white/80 mt-1 leading-normal font-normal">
-                    Iniciando a aula de <strong className="text-primary font-bold">{activeNotification.name}</strong> ({activeNotification.planName}). Gostaria de marcar presença dos alunos?
+                  <p className="text-[12.5px] text-white/70 mt-1 leading-normal font-normal">
+                    Aula das {activeNotification.time}
                   </p>
                 </div>
 
                 {/* iOS Styled Actions */}
                 <div className="border-t border-white/10 flex divide-x divide-white/10">
                   <button
-                    onClick={handleDismiss}
-                    className="flex-1 py-3 text-xs font-semibold text-white/60 hover:bg-white/5 active:bg-white/5 transition-colors text-center"
+                    onClick={() => handleCancelClass(activeNotification)}
+                    disabled={isConfirming}
+                    className="flex-1 py-3 text-xs font-semibold text-red-400 hover:bg-white/5 active:bg-white/5 transition-colors text-center disabled:opacity-50"
                   >
-                    Ignorar
+                    Cancelar aula
                   </button>
                   <button
                     onClick={() => handleConfirmPresence(activeNotification)}
@@ -538,7 +496,7 @@ export function AndroidNotificationManager() {
                     ) : (
                       <>
                         <Check className="w-3.5 h-3.5 stroke-[2.5px]" />
-                        Confirmar Aula
+                        Confirmar presença
                       </>
                     )}
                   </button>
@@ -572,20 +530,21 @@ export function AndroidNotificationManager() {
                 {/* Android Notification Body */}
                 <div className="px-5 pb-4">
                   <h4 className="text-[15px] font-bold text-white tracking-tight">
-                    Hora da Aula! {activeNotification.time}
+                    Está na hora da aula de <span className="text-primary">{activeNotification.name}</span>
                   </h4>
                   <p className="text-sm text-[#d1d1d6] mt-1 font-medium leading-relaxed">
-                    Iniciando a aula de <strong className="text-primary font-bold">{activeNotification.name}</strong> ({activeNotification.planName}). Gostaria de marcar presença para os alunos agora?
+                    Aula das {activeNotification.time}
                   </p>
                 </div>
 
                 {/* Android Styled Action Buttons */}
                 <div className="flex border-t border-[#2c2c2e] divide-x divide-[#2c2c2e]">
                   <button
-                    onClick={handleDismiss}
-                    className="flex-1 py-3.5 text-sm font-bold text-[#a4a4a8] hover:bg-[#2c2c2e] transition-colors"
+                    onClick={() => handleCancelClass(activeNotification)}
+                    disabled={isConfirming}
+                    className="flex-1 py-3.5 text-sm font-bold text-red-400 hover:bg-[#2c2c2e] transition-colors disabled:opacity-50"
                   >
-                    Ignorar
+                    Cancelar aula
                   </button>
                   <button
                     onClick={() => handleConfirmPresence(activeNotification)}
@@ -597,7 +556,7 @@ export function AndroidNotificationManager() {
                     ) : (
                       <>
                         <Check className="w-4 h-4 stroke-[3px]" />
-                        Confirmar Aula
+                        Confirmar presença
                       </>
                     )}
                   </button>

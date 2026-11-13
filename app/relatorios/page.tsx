@@ -396,14 +396,23 @@ export default function Relatorios() {
           // Count attendances for the group itself
           let groupAulas = 0;
           let groupFaltas = 0;
+          let academiaAlunos = 0;
+          const isAcademia = group.class_category === 'academia';
+          const isPerStudent = !!plan && (plan.billing_cycle === 'aluno' || plan.type === 'Pagamento por aluno');
           targetSessions.forEach(session => {
             if (session.type === 'group' && session.reference_id === group.id) {
                let attendees: string[] = [];
                if (Array.isArray(session.attendee_ids)) attendees = session.attendee_ids;
                else if (session.attendee_ids) attendees = session.attendee_ids.attendees || [];
                
-               if (attendees.length > 0) groupAulas++;
+               // Professor de sala (academia): toda aula registrada conta como aula dada,
+               // a lista de presença não se aplica. Nos grupos, sem ninguém presente = falta.
+               if (isAcademia || attendees.length > 0) groupAulas++;
                else groupFaltas++;
+               if (isAcademia) {
+                 const count = Number(session.attendee_ids?.academia_count) || 0;
+                 academiaAlunos += count > 0 ? count : attendees.length;
+               }
             }
           });
 
@@ -418,7 +427,10 @@ export default function Relatorios() {
                faltas: groupFaltas,
                valor: 0, // Will be updated below in per-class calculation, or handled by the monthly check
                isPendente: false,
-               isGroup: true
+               isGroup: true,
+               isAcademia,
+               isPerStudent,
+               academiaAlunos
             });
             
             // If it was a monthly plan, assign the value to the group too (for display only)
@@ -481,6 +493,8 @@ export default function Relatorios() {
                   } else {
                     sessionAmount = Number(plan.price);
                   }
+                  const gDetail = newStudentDetails.find(s => s.id === session.reference_id && s.isGroup);
+                  if (gDetail) gDetail.valor += sessionAmount;
                 }
               } else {
                 if (!targetMonthlyProcessed.has(session.reference_id)) {
@@ -513,7 +527,10 @@ export default function Relatorios() {
               }
             }
             sessionAmount += Number(additionalValue);
-            if (Number(additionalValue) !== 0 && attendees.length > 0) {
+            if (Number(additionalValue) !== 0 && group?.class_category === 'academia') {
+               const gDetail = newStudentDetails.find(s => s.id === session.reference_id && s.isGroup);
+               if (gDetail) gDetail.valor += Number(additionalValue);
+            } else if (Number(additionalValue) !== 0 && attendees.length > 0) {
                const sDetail = newStudentDetails.find(s => s.id === attendees[0]);
                if (sDetail) sDetail.valor += Number(additionalValue);
                
@@ -827,9 +844,13 @@ export default function Relatorios() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 mb-0.5 max-w-full">
                       <h4 className="font-label-lg text-label-lg font-bold text-on-surface truncate">{student.name}</h4>
-                      {student.isGroup && <span className="font-label-sm text-xs bg-surface-container px-2 py-0.5 rounded-full text-on-surface-variant shrink-0">Dupla/Grupo</span>}
+                      {student.isGroup && <span className="font-label-sm text-xs bg-surface-container px-2 py-0.5 rounded-full text-on-surface-variant shrink-0">{student.isAcademia ? 'Academia' : 'Dupla/Grupo'}</span>}
                     </div>
-                    <p className="font-body-md text-on-surface-variant truncate">{student.planName} • {student.aulas} aulas / {student.faltas} faltas</p>
+                    <p className="font-body-md text-on-surface-variant truncate">
+                      {student.planName} • {student.isAcademia
+                        ? (student.aulas === 1 ? '1 aula dada' : student.aulas + ' aulas dadas') + (student.isPerStudent ? ' • ' + student.academiaAlunos + ' alunos' : '')
+                        : student.aulas + ' aulas / ' + student.faltas + ' faltas'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 sm:w-auto w-full border-t sm:border-t-0 border-outline-variant pt-3 sm:pt-0 mt-1 sm:mt-0">

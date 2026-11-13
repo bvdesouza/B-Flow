@@ -27,6 +27,7 @@ type SessionItem = {
   attendee_ids: any;
   attended: boolean;
   receipt?: string;
+  academia?: { perStudent: boolean; count: number };
 };
 
 export function StudentFinanceModal({ isOpen, onClose, student, onSuccess, onOpenReceipts }: StudentFinanceModalProps) {
@@ -149,7 +150,9 @@ export function StudentFinanceModal({ isOpen, onClose, student, onSuccess, onOpe
       const status = session.paid ? 'Pago' : 'Pendente';
       
       let attendance = '';
-      if (student.isGroup) {
+      if (session.academia) {
+         attendance = session.academia.perStudent ? `(${session.academia.count} alunos)` : '';
+      } else if (student.isGroup) {
          let attendeesList: string[] = [];
          if (Array.isArray(session.attendee_ids)) attendeesList = session.attendee_ids;
          else if (session.attendee_ids) attendeesList = session.attendee_ids.attendees || [];
@@ -244,6 +247,34 @@ export function StudentFinanceModal({ isOpen, onClose, student, onSuccess, onOpe
           if (s.type === 'group' && s.reference_id === student.id) {
             isRelevant = true;
             let baseAmount = 0;
+            const thisGroup = groupsData.find(g => g.id === student.id);
+            const gPlan = plansData.find(p => p.id === (thisGroup?.plan_id ?? student.plan_id));
+            if (thisGroup?.class_category === 'academia') {
+              // Professor de sala: recebe por aula dada (x duração) ou por aluno que foi na aula
+              const perStudent = !!gPlan && (gPlan.billing_cycle === 'aluno' || gPlan.type === 'Pagamento por aluno');
+              const count = Number(s.attendee_ids?.academia_count) || attendees.length;
+              if (gPlan) {
+                baseAmount = perStudent
+                  ? Number(gPlan.price) * count
+                  : (gPlan.billing_cycle === 'aula' || gPlan.type === 'Pagamento por aula')
+                    ? Number(gPlan.price) * (Number(thisGroup.duration) || 1)
+                    : Number(gPlan.price);
+              }
+              items.push({
+                id: s.id,
+                date: s.date,
+                status: s.status,
+                paid: isPaid,
+                amount: baseAmount + Number(additionalValue),
+                type: s.type,
+                groupName: student.name,
+                attendee_ids: s.attendee_ids,
+                attended: true,
+                receipt: s.attendee_ids?.receipt || undefined,
+                academia: { perStudent, count },
+              });
+              return;
+            }
             if (attendees.length > 1) {
               const gPlan = plansData.find(p => p.id === student.plan_id);
               if (gPlan) baseAmount = Number(gPlan.price);
@@ -745,6 +776,11 @@ export function StudentFinanceModal({ isOpen, onClose, student, onSuccess, onOpe
                                   let attendeesList: string[] = [];
                                   if (Array.isArray(session.attendee_ids)) attendeesList = session.attendee_ids;
                                   else if (session.attendee_ids) attendeesList = session.attendee_ids.attendees || [];
+                                  if (session.academia) {
+                                    return session.academia.perStudent
+                                      ? (session.academia.count === 1 ? '1 aluno na aula' : session.academia.count + ' alunos na aula')
+                                      : 'Aula dada';
+                                  }
                                   if (attendeesList.length > 1) return 'Presentes: ' + attendeesList.map(id => studentsMap[id]?.split(' ')[0] || 'Aluno').join(' e ');
                                   if (attendeesList.length === 1) return 'Presente: ' + attendeesList.map(id => studentsMap[id]?.split(' ')[0] || 'Aluno').join(', ');
                                   return 'Faltaram todos';

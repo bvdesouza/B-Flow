@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Camera, Loader2, Save, User as UserIcon, Bell, Play, Check, BellRing, Clock, TriangleAlert, Smartphone, Send, CalendarCheck } from 'lucide-react';
+import { Camera, Loader2, Save, User as UserIcon, Bell, Check, BellRing, Clock, TriangleAlert, Smartphone, CalendarCheck } from 'lucide-react';
 import {
   isNativeApp,
   getPermissionState,
   requestPermission,
   rescheduleClassNotifications,
-  sendTestNotification,
   PermissionState,
 } from '@/lib/nativeNotifications';
 import Image from 'next/image';
@@ -35,7 +34,6 @@ export default function Configuracoes() {
   const [isNative, setIsNative] = useState(false);
   const [notifPermission, setNotifPermission] = useState<PermissionState>('prompt');
   const [scheduledCount, setScheduledCount] = useState<number | null>(null);
-  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
 
   const refreshNotificationStatus = async () => {
     const native = isNativeApp();
@@ -63,18 +61,6 @@ export default function Configuracoes() {
   const handleRequestPermission = async () => {
     await requestPermission();
     await refreshNotificationStatus();
-  };
-
-  const handleSendTest = async () => {
-    setTestState('sending');
-    try {
-      const ok = await sendTestNotification();
-      setTestState(ok ? 'sent' : 'error');
-      await refreshNotificationStatus();
-    } catch {
-      setTestState('error');
-    }
-    setTimeout(() => setTestState('idle'), 6000);
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,23 +196,6 @@ export default function Configuracoes() {
     if (isNativeApp()) {
       setTimeout(() => refreshNotificationStatus(), 300);
     }
-  };
-
-  const handleTriggerSimulation = () => {
-    // Generate a simulated notification detail with current time
-    const nowStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    const detail = {
-      id: 'simulation-id',
-      type: 'group',
-      name: 'Simulação de Aula (Pilates)',
-      time: nowStr,
-      planName: 'Plano Semanal Fixo',
-      scheduleItem: { isOneOff: false },
-      originalData: {},
-      studentIds: []
-    };
-
-    window.dispatchEvent(new CustomEvent('simulate-notification', { detail }));
   };
 
   if (loading) {
@@ -379,7 +348,7 @@ export default function Configuracoes() {
               <div>
                 <h3 className="text-lg font-bold">Avisos de aula</h3>
                 <p className="text-sm text-white/80 mt-0.5 max-w-md">
-                  Receba um aviso no celular, mesmo com o app fechado, e confirme a presença dos alunos com um toque.
+                  Receba um aviso no celular, mesmo com o app fechado, com os botões para confirmar a presença ou cancelar a aula.
                 </p>
               </div>
             </div>
@@ -498,29 +467,6 @@ export default function Configuracoes() {
               {notifOffset === 0 ? 'O aviso chega no horário de início da aula.' : 'O aviso chega ' + (notifOffset === 60 ? '1 hora' : notifOffset + ' minutos') + ' antes do início da aula.'}
               {isNative && ' Com o celular parado por muito tempo, o Android pode atrasar o aviso alguns minutos para economizar bateria.'}
             </p>
-          </div>
-
-          {/* Teste */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-5 border-t border-outline-variant/40">
-            <div className="text-sm">
-              <p className="font-bold text-on-surface">Testar aviso</p>
-              <p className="text-on-surface-variant mt-0.5">
-                {isNative
-                  ? 'Enviamos um aviso de exemplo em 5 segundos. Feche o app para ver o pop-up. Nada é salvo.'
-                  : 'Mostra um aviso de exemplo aqui na tela. Nada é salvo.'}
-              </p>
-              {testState === 'sent' && <p className="text-primary font-bold mt-1">Aviso enviado! Aguarde 5 segundos.</p>}
-              {testState === 'error' && <p className="text-error font-bold mt-1">Não foi possível enviar. Verifique a permissão de notificações.</p>}
-            </div>
-            <button
-              type="button"
-              onClick={isNative ? handleSendTest : handleTriggerSimulation}
-              disabled={testState === 'sending'}
-              className="flex items-center justify-center gap-2 py-2.5 px-5 rounded-full bg-surface-container-highest hover:bg-outline-variant/30 text-on-surface font-bold text-sm border border-outline-variant transition-all shrink-0 disabled:opacity-50"
-            >
-              {testState === 'sending' ? <Loader2 className="w-4 h-4 animate-spin" /> : isNative ? <Send className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              Enviar teste
-            </button>
           </div>
         </div>
       </section>
